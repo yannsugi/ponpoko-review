@@ -15,6 +15,16 @@
   "main": "./out/extension.js",
   "activationEvents": [],
   "contributes": {
+    "configuration": {
+      "title": "ぽんぽこレビュー",
+      "properties": {
+        "ponpokoReview.baseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "比較基準ブランチ（base...HEAD の base）。"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
