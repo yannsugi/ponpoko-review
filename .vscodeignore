@@ -1,0 +1,9 @@
+.vscode/**
+src/**
+.gitignore
+.vscodeignore
+tsconfig.json
+**/*.map
+**/*.ts
+.ponpoko-review/**
+node_modules/**

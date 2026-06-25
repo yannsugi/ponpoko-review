@@ -1,0 +1,102 @@
+{
+  "name": "ponpoko-review",
+  "displayName": "ぽんぽこレビュー",
+  "description": "ブランチ間diffをツリー表示し、PRレビュー風インラインコメントをworktree単位でMarkdownに出力する個人用拡張",
+  "version": "0.0.1",
+  "publisher": "yannsugi",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ponpokoReview",
+          "title": "ぽんぽこレビュー",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "ponpokoReview": [
+        {
+          "id": "ponpokoReview.diffTree",
+          "name": "Diff Tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ponpokoReview.refresh",
+        "title": "ぽんぽこ: ツリーを更新",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ponpokoReview.submit",
+        "title": "ぽんぽこ: レビューを書き出す (Submit)",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ponpokoReview.clear",
+        "title": "ぽんぽこ: コメントを全消去 (Clear)",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "ponpokoReview.addComment",
+        "title": "ぽんぽこ: コメントを追加"
+      },
+      {
+        "command": "ponpokoReview.setBase",
+        "title": "ぽんぽこ: 比較基準ブランチを選択",
+        "icon": "$(git-branch)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ponpokoReview.setBase",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.refresh",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ponpokoReview.submit",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ponpokoReview.clear",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@4"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "ponpokoReview.addComment",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  }
+}
