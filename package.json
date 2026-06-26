@@ -66,10 +66,30 @@
         "command": "ponpokoReview.setBase",
         "title": "ponpoko-review: 比較基準ブランチを選択",
         "icon": "$(git-branch)"
+      },
+      {
+        "command": "ponpokoReview.viewAsTree",
+        "title": "ponpoko-review: ツリー表示にする",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "ponpokoReview.viewAsList",
+        "title": "ponpoko-review: リスト表示にする",
+        "icon": "$(list-flat)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "ponpokoReview.viewAsTree",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.viewMode == list",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ponpokoReview.viewAsList",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.viewMode == tree",
+          "group": "navigation@0"
+        },
         {
           "command": "ponpokoReview.setBase",
           "when": "view == ponpokoReview.diffTree",

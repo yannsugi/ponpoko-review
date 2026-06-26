@@ -36,6 +36,21 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(treeView);
 
+  // 表示モード（list/tree）切替。メニューの when 句用に context key を同期。
+  const syncViewMode = () =>
+    vscode.commands.executeCommand('setContext', 'ponpokoReview.viewMode', treeProvider.getMode());
+  syncViewMode();
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ponpokoReview.viewAsTree', () => {
+      treeProvider.setMode('tree');
+      syncViewMode();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.viewAsList', () => {
+      treeProvider.setMode('list');
+      syncViewMode();
+    }),
+  );
+
   // チェックボックス操作 → viewed の保存/解除
   context.subscriptions.push(
     treeView.onDidChangeCheckboxState(async (e) => {
