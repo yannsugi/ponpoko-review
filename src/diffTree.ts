@@ -100,17 +100,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       worktreeName(node.worktree),
       vscode.TreeItemCollapsibleState.Expanded,
     );
-    const base = this.getBase();
-    const head = node.worktree.detached
+    // current = このworktreeのブランチ(変更元=git head), target = マージ先(=base)。
+    const target = this.getBase();
+    const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
-    // 何のブランチ(base)と何のブランチ(head)を比較しているか明示。
-    item.description = `base: ${base} → head: ${head}`;
+    // 矢印はマージの向き（current を target に取り込む）。
+    item.description = `current: ${current} → target: ${target}`;
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
-        `base: \`${base}\`\n\n` +
-        `head: \`${head}\`\n\n` +
+        `current: \`${current}\`  （変更元 / git head）\n\n` +
+        `target: \`${target}\`  （マージ先 / base）\n\n` +
         `${node.worktree.path}`,
     );
     item.contextValue = 'ponpoko.worktree';
