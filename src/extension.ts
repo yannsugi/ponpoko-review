@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import { listBranches, worktreeList } from './git';
+import { listBranches, viewHash, worktreeList } from './git';
 import { DiffNode, DiffTreeProvider } from './diffTree';
 import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
 import { openDiff } from './openDiff';
 import { CommentStore } from './comments';
 import { writeReview } from './markdown';
+import { ViewedStore } from './viewed';
 
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -25,12 +26,42 @@ export function activate(context: vscode.ExtensionContext): void {
   const store = new CommentStore();
   context.subscriptions.push(store);
 
+  // "Viewed" 永続化ストア
+  const viewed = new ViewedStore(context.workspaceState);
+
   // 差分ツリー
-  const treeProvider = new DiffTreeProvider(repoRoot);
+  const treeProvider = new DiffTreeProvider(repoRoot, viewed);
+  const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
+    treeDataProvider: treeProvider,
+  });
+  context.subscriptions.push(treeView);
+
+  // チェックボックス操作 → viewed の保存/解除
   context.subscriptions.push(
-    vscode.window.createTreeView('ponpokoReview.diffTree', {
-      treeDataProvider: treeProvider,
+    treeView.onDidChangeCheckboxState(async (e) => {
+      const base = treeProvider.getBase();
+      for (const [node, state] of e.items) {
+        if (node.kind !== 'file') {
+          continue;
+        }
+        if (state === vscode.TreeItemCheckboxState.Checked) {
+          try {
+            const hash = await viewHash(base, node.entry.path, node.worktree.path);
+            await viewed.setViewed(node.worktree.path, node.entry.path, hash);
+          } catch {
+            // ハッシュ取得失敗時はマークしない。
+          }
+        } else {
+          await viewed.unsetViewed(node.worktree.path, node.entry.path);
+        }
+      }
+      treeProvider.refresh();
     }),
+  );
+
+  // ファイル保存で差分が変わりうる → 再検証のためツリーを更新
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(() => treeProvider.refresh()),
   );
 
   context.subscriptions.push(

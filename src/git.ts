@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { createHash } from 'crypto';
 
 const execFileAsync = promisify(execFile);
 
@@ -121,6 +122,16 @@ export function parseWorktreePorcelain(stdout: string): Worktree[] {
   }
   flush();
   return worktrees;
+}
+
+/**
+ * 表示中の差分（base ↔ 作業ツリー）の内容ハッシュを返す。
+ * "Viewed" のチェック時点と中身が変わったかの判定に使う。
+ * base 側 / 作業ツリー側のどちらが変わってもハッシュが変わる。
+ */
+export async function viewHash(base: string, path: string, cwd: string): Promise<string> {
+  const stdout = await runGit(['diff', base, '--', path], cwd);
+  return createHash('sha1').update(stdout).digest('hex');
 }
 
 /** ローカルブランチ名の一覧を返す。 */
