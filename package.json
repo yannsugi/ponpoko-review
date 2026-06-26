@@ -30,7 +30,7 @@
         {
           "id": "ponpokoReview",
           "title": "ぽんぽこレビュー",
-          "icon": "$(comment-discussion)"
+          "icon": "media/ponpoko.svg"
         }
       ]
     },
