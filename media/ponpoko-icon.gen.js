@@ -1,5 +1,5 @@
 const fs = require('fs');
-// 手描きの頭グリッド（'#'=塗り '.'=透明）。各行は同じ幅。
+// 手描きの頭グリッド（'#'=塗り '.'=透明）
 const head = [
   '..........#...#.......',
   '.........###.###......',
@@ -19,13 +19,11 @@ const head = [
   '.........#######......',
 ];
 const W = head[0].length;
-head.forEach((r, i) => { if (r.length !== W) throw new Error(`row ${i} width ${r.length}!=${W}`); });
-const Hpad = 4;               // 尻尾の下余白
+const Hpad = 4;
 const H = head.length + Hpad;
 const g = Array.from({length: W}, () => new Array(H).fill(false));
 head.forEach((row, y) => [...row].forEach((c, x) => { if (c === '#') g[x][y] = true; }));
 
-// 手続き的に縞尻尾を左下に
 const inb = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
 const set = (x, y, v) => { if (inb(Math.round(x), Math.round(y))) g[Math.round(x)][Math.round(y)] = v; };
 function disc(cx, cy, r, v = true) {
@@ -35,14 +33,23 @@ function disc(cx, cy, r, v = true) {
 }
 const tail = [[5,11],[4,13],[3.2,15],[3,17],[3.6,19]];
 for (const [x, y] of tail) disc(x, y, 2.3);
-// ring gaps（縞）
 for (const yy of [12.5, 15.5, 18.5]) for (let x = 0; x < 7; x++) set(x, yy, false);
+
+// --- 輪郭抽出: 塗りセルのうち4近傍に空(or外)があるものだけ残す ---
+const empty = (x, y) => !inb(x, y) || !g[x][y];
+const out = Array.from({length: W}, () => new Array(H).fill(false));
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+  if (g[x][y] && (empty(x-1,y) || empty(x+1,y) || empty(x,y-1) || empty(x,y+1))) out[x][y] = true;
+
+// 目と鼻は塗りドットで強調（穴の中心に置く）
+const dots = [[8,8],[15,8],[11,12]]; // 左目, 右目, 鼻
+for (const [x, y] of dots) out[x][y] = true;
 
 const rects = [];
 for (let y = 0; y < H; y++) {
   let x = 0;
   while (x < W) {
-    if (g[x][y]) { let run = 1; while (x + run < W && g[x + run][y]) run++; rects.push(`<rect x="${x}" y="${y}" width="${run}" height="1"/>`); x += run; }
+    if (out[x][y]) { let run = 1; while (x + run < W && out[x + run][y]) run++; rects.push(`<rect x="${x}" y="${y}" width="${run}" height="1"/>`); x += run; }
     else x++;
   }
 }
