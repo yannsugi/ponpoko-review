@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 class ReviewComment implements vscode.Comment {
   body: vscode.MarkdownString;
   mode = vscode.CommentMode.Preview;
-  author: vscode.CommentAuthorInformation = { name: 'ぽんぽこ' };
+  author: vscode.CommentAuthorInformation = { name: 'ponpoko-review' };
 
   constructor(text: string) {
     this.body = new vscode.MarkdownString(text);
@@ -25,7 +25,7 @@ export class CommentStore implements vscode.Disposable {
   constructor() {
     this.controller = vscode.comments.createCommentController(
       'ponpokoReview',
-      'ぽんぽこレビュー',
+      'ponpoko-review',
     );
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: (document) => {

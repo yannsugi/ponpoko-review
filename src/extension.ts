@@ -10,7 +10,7 @@ import { ViewedStore } from './viewed';
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!repoRoot) {
-    vscode.window.showWarningMessage('ぽんぽこレビュー: ワークスペースが開かれていません。');
+    vscode.window.showWarningMessage('ponpoko-review: ワークスペースが開かれていません。');
     return;
   }
 
@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('ponpokoReview.submit', async () => {
       const threads = store.getThreads();
       if (threads.length === 0) {
-        vscode.window.showWarningMessage('ぽんぽこレビュー: コメントがありません。');
+        vscode.window.showWarningMessage('ponpoko-review: コメントがありません。');
         return;
       }
       try {
@@ -98,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
           worktrees,
         });
         const choice = await vscode.window.showInformationMessage(
-          `ぽんぽこレビュー: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
+          `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
           '開く',
         );
         if (choice === '開く' && result.files.length > 0) {
@@ -107,14 +107,14 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       } catch (err) {
         vscode.window.showErrorMessage(
-          `ぽんぽこレビュー: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
+          `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }),
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
       store.clear();
-      vscode.window.showInformationMessage('ぽんぽこレビュー: コメントを消去しました。');
+      vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
 
     vscode.commands.registerCommand('ponpokoReview.setBase', async () => {

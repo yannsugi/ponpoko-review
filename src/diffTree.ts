@@ -101,7 +101,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         const worktrees = await worktreeList(this.repoRoot);
         return worktrees.map((worktree) => ({ kind: 'worktree', worktree }));
       } catch (err) {
-        vscode.window.showErrorMessage(`ぽんぽこ: worktree 列挙に失敗: ${describe(err)}`);
+        vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
         return [];
       }
     }
@@ -122,7 +122,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         return nodes;
       } catch (err) {
         vscode.window.showErrorMessage(
-          `ぽんぽこ: diff 取得に失敗 (${worktreeName(node.worktree)}, base=${base}): ${describe(err)}`,
+          `ponpoko-review: diff 取得に失敗 (${worktreeName(node.worktree)}, base=${base}): ${describe(err)}`,
         );
         return [];
       }

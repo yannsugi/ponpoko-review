@@ -1,6 +1,6 @@
 {
   "name": "ponpoko-review",
-  "displayName": "ぽんぽこレビュー",
+  "displayName": "ponpoko-review",
   "description": "ブランチ間diffをツリー表示し、PRレビュー風インラインコメントをworktree単位でMarkdownに出力する個人用拡張",
   "version": "0.0.1",
   "publisher": "yannsugi",
@@ -16,7 +16,7 @@
   "activationEvents": [],
   "contributes": {
     "configuration": {
-      "title": "ぽんぽこレビュー",
+      "title": "ponpoko-review",
       "properties": {
         "ponpokoReview.baseBranch": {
           "type": "string",
@@ -29,7 +29,7 @@
       "activitybar": [
         {
           "id": "ponpokoReview",
-          "title": "ぽんぽこレビュー",
+          "title": "ponpoko-review",
           "icon": "media/ponpoko-icon.svg"
         }
       ]
@@ -45,26 +45,26 @@
     "commands": [
       {
         "command": "ponpokoReview.refresh",
-        "title": "ぽんぽこ: ツリーを更新",
+        "title": "ponpoko-review: ツリーを更新",
         "icon": "$(refresh)"
       },
       {
         "command": "ponpokoReview.submit",
-        "title": "ぽんぽこ: レビューを書き出す (Submit)",
+        "title": "ponpoko-review: レビューを書き出す (Submit)",
         "icon": "$(check)"
       },
       {
         "command": "ponpokoReview.clear",
-        "title": "ぽんぽこ: コメントを全消去 (Clear)",
+        "title": "ponpoko-review: コメントを全消去 (Clear)",
         "icon": "$(clear-all)"
       },
       {
         "command": "ponpokoReview.addComment",
-        "title": "ぽんぽこ: コメントを追加"
+        "title": "ponpoko-review: コメントを追加"
       },
       {
         "command": "ponpokoReview.setBase",
-        "title": "ぽんぽこ: 比較基準ブランチを選択",
+        "title": "ponpoko-review: 比較基準ブランチを選択",
         "icon": "$(git-branch)"
       }
     ],
