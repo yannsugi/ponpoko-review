@@ -57,11 +57,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         worktreeName(node.worktree),
         vscode.TreeItemCollapsibleState.Expanded,
       );
-      item.description = node.worktree.detached
-        ? '(detached)'
-        : node.worktree.branch ?? '';
+      const base = this.getBase();
+      const head = node.worktree.detached
+        ? `(detached ${node.worktree.head.slice(0, 7)})`
+        : node.worktree.branch ?? '(no branch)';
+      // 何のブランチと何のブランチを比較しているか（base...そのworktreeのブランチ）。
+      item.description = `${base}...${head}`;
       item.iconPath = new vscode.ThemeIcon('repo');
-      item.tooltip = node.worktree.path;
+      item.tooltip = new vscode.MarkdownString(
+        `**${worktreeName(node.worktree)}**\n\n` +
+          `比較: \`${base}\` ... \`${head}\`\n\n` +
+          `${node.worktree.path}`,
+      );
       item.contextValue = 'ponpoko.worktree';
       return item;
     }
