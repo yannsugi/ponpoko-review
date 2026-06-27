@@ -160,6 +160,11 @@ export function activate(context: vscode.ExtensionContext): void {
       treeProvider.setMode('list');
       syncViewMode();
     }),
+    // 順次切り替え: list → tree → list …
+    vscode.commands.registerCommand('ponpokoReview.cycleViewMode', () => {
+      treeProvider.setMode(treeProvider.getMode() === 'list' ? 'tree' : 'list');
+      syncViewMode();
+    }),
     vscode.commands.registerCommand('ponpokoReview.commentsFilterOn', () => {
       treeProvider.setCommentsOnly(true);
       syncCommentsOnly();

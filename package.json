@@ -141,6 +141,11 @@
         "icon": "$(list-flat)"
       },
       {
+        "command": "ponpokoReview.cycleViewMode",
+        "title": "ponpoko-review: 表示モードを切り替え (list/tree)",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "ponpokoReview.commentsFilterOn",
         "title": "ponpoko-review: コメントのあるファイルだけ表示",
         "icon": "$(filter)"
@@ -179,13 +184,8 @@
     "menus": {
       "view/title": [
         {
-          "command": "ponpokoReview.viewAsTree",
-          "when": "view == ponpokoReview.diffTree && ponpokoReview.viewMode == list",
-          "group": "navigation@0"
-        },
-        {
-          "command": "ponpokoReview.viewAsList",
-          "when": "view == ponpokoReview.diffTree && ponpokoReview.viewMode == tree",
+          "command": "ponpokoReview.cycleViewMode",
+          "when": "view == ponpokoReview.diffTree",
           "group": "navigation@0"
         },
         {
