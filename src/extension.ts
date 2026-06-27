@@ -43,14 +43,14 @@ export function activate(context: vscode.ExtensionContext): void {
         worktrees,
         combined,
       });
-      const choice = await vscode.window.showInformationMessage(
-        `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
-        '開く',
-      );
-      if (choice === '開く' && result.files.length > 0) {
+      // 書き出した md を自動で開いて表示する。
+      if (result.files.length > 0) {
         const doc = await vscode.workspace.openTextDocument(result.files[0]);
-        await vscode.window.showTextDocument(doc);
+        await vscode.window.showTextDocument(doc, { preview: false });
       }
+      vscode.window.showInformationMessage(
+        `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
+      );
     } catch (err) {
       vscode.window.showErrorMessage(
         `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
