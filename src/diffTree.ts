@@ -209,10 +209,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
       // 配下のコメント数を集計表示（畳んでいても分かる）。フォルダ自体のコメントと
-      // 誤読しないよう「配下合計」と明記。showComments=false なら出さない。
-      const cc = this.showComments
-        ? this.commentCountUnder(path.join(node.worktree.path, node.relDir))
-        : 0;
+      // 誤読しないよう「配下合計」と明記。有無表示なので常時。
+      const cc = this.commentCountUnder(path.join(node.worktree.path, node.relDir));
       if (cc > 0) {
         item.description = `💬${cc}（配下合計）`;
       }
@@ -267,7 +265,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
     // 矢印はマージの向き（current を target に取り込む）。上書き時は ★、コメントは 💬N。
-    const cc = this.showComments ? this.commentCountUnder(node.worktree.path) : 0;
+    const cc = this.commentCountUnder(node.worktree.path);
     item.description =
       `current: ${current} → target: ${target}` +
       (overridden ? ' ★' : '') +
@@ -286,13 +284,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private fileItem(node: FileNode): vscode.TreeItem {
     const { entry } = node;
     const fsPath = path.join(node.worktree.path, entry.path);
-    const comments = this.showComments ? this.commentsOf(fsPath) : [];
+    // 💬（有無/件数）は常時表示。子ノード展開は showComments のときだけ。
+    const comments = this.commentsOf(fsPath);
     // tree モードはベース名、list モードはフルパスを表示。
     const label = this.mode === 'tree' ? entry.path.split('/').pop()! : entry.path;
-    // コメントがあれば展開してコメント子ノードを出す。
     const item = new vscode.TreeItem(
       label,
-      comments.length > 0
+      this.showComments && comments.length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );

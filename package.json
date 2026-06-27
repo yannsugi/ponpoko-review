@@ -152,12 +152,12 @@
       },
       {
         "command": "ponpokoReview.hideComments",
-        "title": "ponpoko-review: ツリーのコメントを隠す",
+        "title": "ponpoko-review: ファイル配下のコメントを畳む",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "ponpokoReview.showComments",
-        "title": "ponpoko-review: ツリーにコメントを表示",
+        "title": "ponpoko-review: ファイル配下のコメントを展開可能に",
         "icon": "$(comment)"
       },
       {
