@@ -136,7 +136,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // 表示モード（list/tree）切替。メニューの when 句用に context key を同期。
   const syncViewMode = () =>
     vscode.commands.executeCommand('setContext', 'ponpokoReview.viewMode', treeProvider.getMode());
+  const syncCommentsOnly = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.commentsOnly',
+      treeProvider.getCommentsOnly(),
+    );
   syncViewMode();
+  syncCommentsOnly();
   context.subscriptions.push(
     vscode.commands.registerCommand('ponpokoReview.viewAsTree', () => {
       treeProvider.setMode('tree');
@@ -145,6 +152,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('ponpokoReview.viewAsList', () => {
       treeProvider.setMode('list');
       syncViewMode();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.commentsFilterOn', () => {
+      treeProvider.setCommentsOnly(true);
+      syncCommentsOnly();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.commentsFilterOff', () => {
+      treeProvider.setCommentsOnly(false);
+      syncCommentsOnly();
     }),
   );
 

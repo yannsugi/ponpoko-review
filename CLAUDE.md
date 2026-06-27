@@ -21,7 +21,8 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - `viewHash` / `viewHashes`(バッチ): ハッシュ＝`<base blob oid>:<作業ツリー blob oid>`。`ls-tree`＋`hash-object` を各1プロセスにまとめる。
   - `assertSafeRef`: base/revision を単独引数で渡す前に検証（空・`-`始まり・制御文字を拒否）。
 - `src/diffTree.ts` — `TreeDataProvider`。トップ=worktree、配下に dir/file ノード。
-  - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。
+  - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。`commentsOnly` フィルタ（list/tree と直交、コメントのあるファイルだけ表示）。
+  - ファイルの子＝コメント(CommentNode)。フォルダ/worktree に 💬 集計、差分なしは MessageNode。
   - viewed チェックボックス。フォルダは配下全 viewed で checked（`manageCheckboxStateManually:true` で自前管理）。
   - worktree ごとの差分を `cache`（refresh 単位）。`refresh()`=cache破棄+git再取得、`softRefresh()`=再描画のみ（viewed/コメント変化用、ちらつき防止）。
   - ファイルアイコンは status 文字アイコン（`media/status/<a|m|d|r|c|t|u>.svg` を `iconPath` に。viewed は `-dim` グレー版）。
