@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 /** 1コメント = 1修正指示。 */
 class ReviewComment implements vscode.Comment {
@@ -52,6 +53,11 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads];
   }
 
+  /** 指定 worktree 配下のスレッドだけ返す（md 書き出し用）。 */
+  getThreadsUnder(worktreePath: string): vscode.CommentThread[] {
+    return [...this.threads].filter((t) => isUnderPath(worktreePath, t.uri.fsPath));
+  }
+
   /** 全スレッドを破棄する（Clear）。 */
   clear(): void {
     for (const thread of this.threads) {
@@ -60,10 +66,29 @@ export class CommentStore implements vscode.Disposable {
     this.threads.clear();
   }
 
+  /** 指定 worktree 配下のスレッドだけ破棄する。破棄した数を返す。 */
+  clearUnder(worktreePath: string): number {
+    let n = 0;
+    for (const thread of [...this.threads]) {
+      if (isUnderPath(worktreePath, thread.uri.fsPath)) {
+        thread.dispose();
+        this.threads.delete(thread);
+        n++;
+      }
+    }
+    return n;
+  }
+
   dispose(): void {
     this.clear();
     this.controller.dispose();
   }
+}
+
+/** fsPath が dir 配下かどうか。 */
+function isUnderPath(dir: string, fsPath: string): boolean {
+  const rel = path.relative(dir, fsPath);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 /** スレッドのコメント本文を結合して1つのテキストにする。 */

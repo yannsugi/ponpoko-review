@@ -22,6 +22,11 @@
           "type": "string",
           "default": "main",
           "description": "比較基準ブランチ（base...HEAD の base）。"
+        },
+        "ponpokoReview.outputDir": {
+          "type": "string",
+          "default": ".ponpoko-review",
+          "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md を書き出す。"
         }
       }
     },
@@ -76,6 +81,16 @@
         "command": "ponpokoReview.viewAsList",
         "title": "ponpoko-review: リスト表示にする",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "ponpokoReview.submitWorktree",
+        "title": "ponpoko-review: このworktreeのコメントを書き出す",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ponpokoReview.clearWorktree",
+        "title": "ponpoko-review: このworktreeのコメントをクリア",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -109,6 +124,18 @@
           "command": "ponpokoReview.clear",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ponpokoReview.submitWorktree",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.clearWorktree",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@2"
         }
       ],
       "comments/commentThread/context": [

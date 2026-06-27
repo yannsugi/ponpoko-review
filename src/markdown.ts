@@ -17,6 +17,12 @@ export interface WriteResult {
   itemCount: number;
 }
 
+/** fsPath が dir 配下かどうか。 */
+export function isUnder(dir: string, fsPath: string): boolean {
+  const rel = path.relative(dir, fsPath);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 /** uri を所有する worktree を、パスの最長前方一致で求める。 */
 function owningWorktree(fsPath: string, worktrees: Worktree[]): Worktree | undefined {
   let best: Worktree | undefined;
@@ -34,18 +40,18 @@ function owningWorktree(fsPath: string, worktrees: Worktree[]): Worktree | undef
 
 /**
  * 全コメントスレッドを worktree 単位にまとめ、
- * `<repoRoot>/.ponpoko-review/<worktree-name>/review.md` に書き出す。
+ * `<outputRoot>/<worktree-name>/review.md` に書き出す。
  *
  * 見出しは `path:line (base...HEAD)` 形式。スレッドは right(file) uri 前提なので
  * line は HEAD 基準でそのまま使える。
  */
 export async function writeReview(opts: {
-  repoRoot: string;
+  outputRoot: string;
   base: string;
   threads: vscode.CommentThread[];
   worktrees: Worktree[];
 }): Promise<WriteResult> {
-  const { repoRoot, base, threads, worktrees } = opts;
+  const { outputRoot, base, threads, worktrees } = opts;
 
   // worktree 名 → レビュー項目
   const grouped = new Map<string, ReviewItem[]>();
@@ -76,7 +82,7 @@ export async function writeReview(opts: {
     items.sort((a, b) => (a.relpath === b.relpath ? a.line - b.line : a.relpath < b.relpath ? -1 : 1));
 
     const md = renderMarkdown(name, base, items);
-    const dir = vscode.Uri.file(path.join(repoRoot, '.ponpoko-review', name));
+    const dir = vscode.Uri.file(path.join(outputRoot, name));
     const file = vscode.Uri.joinPath(dir, 'review.md');
     await vscode.workspace.fs.createDirectory(dir);
     await vscode.workspace.fs.writeFile(file, Buffer.from(md, 'utf8'));

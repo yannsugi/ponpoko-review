@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { listBranches, viewHash, worktreeList } from './git';
-import { DiffNode, DiffTreeProvider } from './diffTree';
+import * as path from 'path';
+import { listBranches, viewHash, worktreeList, Worktree } from './git';
+import { DiffNode, DiffTreeProvider, WorktreeNode, worktreeName } from './diffTree';
 import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
 import { openDiff } from './openDiff';
 import { CommentStore } from './comments';
@@ -13,6 +14,46 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.showWarningMessage('ponpoko-review: ワークスペースが開かれていません。');
     return;
   }
+
+  // 出力先（相対はワークスペースルート基準、絶対パスも可）。
+  const resolveOutputRoot = (): string => {
+    const setting = vscode.workspace
+      .getConfiguration('ponpokoReview')
+      .get<string>('outputDir', '.ponpoko-review');
+    return path.isAbsolute(setting) ? setting : path.join(repoRoot, setting);
+  };
+
+  // コメント群を md に書き出す共通処理。
+  const runSubmit = async (
+    threads: vscode.CommentThread[],
+    worktrees: Worktree[],
+    emptyLabel: string,
+  ): Promise<void> => {
+    if (threads.length === 0) {
+      vscode.window.showWarningMessage(`ponpoko-review: ${emptyLabel}コメントがありません。`);
+      return;
+    }
+    try {
+      const result = await writeReview({
+        outputRoot: resolveOutputRoot(),
+        base: treeProvider.getBase(),
+        threads,
+        worktrees,
+      });
+      const choice = await vscode.window.showInformationMessage(
+        `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
+        '開く',
+      );
+      if (choice === '開く' && result.files.length > 0) {
+        const doc = await vscode.workspace.openTextDocument(result.files[0]);
+        await vscode.window.showTextDocument(doc);
+      }
+    } catch (err) {
+      vscode.window.showErrorMessage(
+        `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
 
   // base 側仮想ドキュメントのプロバイダ
   context.subscriptions.push(
@@ -99,38 +140,44 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
 
     vscode.commands.registerCommand('ponpokoReview.submit', async () => {
-      const threads = store.getThreads();
-      if (threads.length === 0) {
-        vscode.window.showWarningMessage('ponpoko-review: コメントがありません。');
-        return;
-      }
-      try {
-        const worktrees = await worktreeList(repoRoot);
-        const result = await writeReview({
-          repoRoot,
-          base: treeProvider.getBase(),
-          threads,
-          worktrees,
-        });
-        const choice = await vscode.window.showInformationMessage(
-          `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
-          '開く',
-        );
-        if (choice === '開く' && result.files.length > 0) {
-          const doc = await vscode.workspace.openTextDocument(result.files[0]);
-          await vscode.window.showTextDocument(doc);
-        }
-      } catch (err) {
-        vscode.window.showErrorMessage(
-          `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
+      const worktrees = await worktreeList(repoRoot);
+      await runSubmit(store.getThreads(), worktrees, '');
     }),
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
       store.clear();
       vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
+
+    // worktree 単位: そのworktreeのコメントだけ書き出す。
+    vscode.commands.registerCommand(
+      'ponpokoReview.submitWorktree',
+      async (node: WorktreeNode) => {
+        if (!node || node.kind !== 'worktree') {
+          return;
+        }
+        const wt = node.worktree;
+        await runSubmit(
+          store.getThreadsUnder(wt.path),
+          [wt],
+          `${worktreeName(wt)} に `,
+        );
+      },
+    ),
+
+    // worktree 単位: そのworktreeのコメントだけクリア。
+    vscode.commands.registerCommand(
+      'ponpokoReview.clearWorktree',
+      (node: WorktreeNode) => {
+        if (!node || node.kind !== 'worktree') {
+          return;
+        }
+        const n = store.clearUnder(node.worktree.path);
+        vscode.window.showInformationMessage(
+          `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
+        );
+      },
+    ),
 
     vscode.commands.registerCommand('ponpokoReview.setBase', async () => {
       let branches: string[] = [];
