@@ -8,7 +8,6 @@ import { CommentStore } from './comments';
 import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
-import { StatusDecorationProvider } from './statusDecoration';
 
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -74,17 +73,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // worktree ごとの比較先(base)上書きストア
   const baseStore = new WorktreeBaseStore(context.workspaceState);
 
-  // 右端の A/M/D/R バッジ用デコレーション
-  const decoration = new StatusDecorationProvider();
-  context.subscriptions.push(vscode.window.registerFileDecorationProvider(decoration));
-
   // 差分ツリー
   const treeProvider = new DiffTreeProvider(
     repoRoot,
     viewed,
     baseStore,
     (fsPath) => store.countFor(fsPath),
-    decoration,
   );
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,

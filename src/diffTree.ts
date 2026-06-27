@@ -1,24 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DiffEntry, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
+import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
-import { ICON_SCHEME, StatusDecorationProvider } from './statusDecoration';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
-/**
- * アイコンテーマのファイルタイプ別アイコンは出しつつ、VS Code 標準の git 装飾
- * （U/M 色バッジ）を抑制するための uri。
- * file: スキームだと git 拡張の FileDecorationProvider が装飾を付けてしまうので、
- * 拡張子はそのままに別スキームへ差し替える（アイコンはパスの拡張子で解決される）。
- */
-function iconUri(fsPath: string): vscode.Uri {
-  return vscode.Uri.file(fsPath).with({ scheme: ICON_SCHEME });
-}
+/** status を表す色付きアイコン（tree で構成は分かるのでファイルタイプアイコンは使わない）。 */
+const STATUS_ICON: Record<FileStatus, { icon: string; color: string }> = {
+  A: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  M: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  D: { icon: 'diff-removed', color: 'gitDecoration.deletedResourceForeground' },
+  R: { icon: 'diff-renamed', color: 'gitDecoration.renamedResourceForeground' },
+  C: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  T: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  U: { icon: 'diff-ignored', color: 'gitDecoration.conflictingResourceForeground' },
+};
 
 export type ViewMode = 'list' | 'tree';
 
@@ -58,8 +58,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly baseStore: WorktreeBaseStore,
     /** ファイル(fsPath)に付いているコメント数を返す。 */
     private readonly commentCountOf: (fsPath: string) => number,
-    /** 右端の A/M/D/R バッジ用デコレーション。 */
-    private readonly decoration: StatusDecorationProvider,
   ) {}
 
   /** 差分データから取り直す全更新（git diff 再実行）。保存・base変更時など。 */
@@ -113,17 +111,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return this.baseStore.get(worktreePath) !== undefined;
   }
 
-  /** キャッシュ全体から fsPath→status マップを作り、右端バッジ用デコレーションへ反映。 */
-  private pushStatuses(): void {
-    const map = new Map<string, string>();
-    for (const [wtPath, entries] of this.cache) {
-      for (const e of entries) {
-        map.set(path.join(wtPath, e.path), e.status);
-      }
-    }
-    this.decoration.setStatuses(map);
-  }
-
   /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
   filesUnder(worktree: Worktree, relDir: string): DiffEntry[] {
     const entries = this.cache.get(worktree.path) ?? [];
@@ -140,10 +127,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         node.label,
         vscode.TreeItemCollapsibleState.Expanded,
       );
-      // ThemeIcon.Folder はアイコンテーマのフォルダ絵で確実に描画される。
-      // resourceUri はカスタムスキームにして git 標準装飾を抑制（フォルダアイコンは
-      // ThemeIcon.Folder 側で出る）。
-      item.resourceUri = iconUri(path.join(node.worktree.path, node.relDir));
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
       // 配下ファイルが全て viewed ならフォルダも checked。
@@ -190,9 +173,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     const fsPath = path.join(node.worktree.path, entry.path);
-    // ファイルタイプ別アイコン＋右端の A/M/D/R バッジ（FileDecoration）を出す。
-    item.resourceUri = iconUri(fsPath);
-    // status は右端バッジへ。description はコメント💬とリネーム元のみ。
+    // status を表す色付きアイコン。viewed は淡色化で de-emphasize。
+    const deco = STATUS_ICON[entry.status] ?? STATUS_ICON.M;
+    item.iconPath = new vscode.ThemeIcon(
+      deco.icon,
+      new vscode.ThemeColor(isViewed ? 'disabledForeground' : deco.color),
+    );
+    // description はコメント💬とリネーム元のみ。
     const comments = this.commentCountOf(fsPath);
     const parts: string[] = [];
     if (comments > 0) {
@@ -265,7 +252,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     try {
       const entries = await diffNameStatus(base, worktree.path);
       this.cache.set(key, entries);
-      this.pushStatuses();
       // viewed のうち、チェック時点から中身が変わったものは自動で外す。
       await Promise.all(
         entries.map((entry) => this.revalidateViewed(base, worktree, entry)),
