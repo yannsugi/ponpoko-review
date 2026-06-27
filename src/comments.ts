@@ -19,11 +19,19 @@ class ReviewComment implements vscode.Comment {
  *   commentingRangeProvider が file スキームだけを許可することで担保する。
  *   left(base 側)に付くと行番号が base 基準でズレる。
  */
+interface SavedThread {
+  uri: string;
+  line: number;
+  comments: string[];
+}
+
+const STORAGE_KEY = 'ponpoko.comments';
+
 export class CommentStore implements vscode.Disposable {
   private readonly controller: vscode.CommentController;
   private readonly threads = new Set<vscode.CommentThread>();
 
-  constructor() {
+  constructor(private readonly state: vscode.Memento) {
     this.controller = vscode.comments.createCommentController(
       'ponpokoReview',
       'ponpoko-review',
@@ -38,6 +46,43 @@ export class CommentStore implements vscode.Disposable {
         return [new vscode.Range(0, 0, last, 0)];
       },
     };
+    this.restore();
+  }
+
+  /** workspaceState から保存済みコメントを復元する。 */
+  private restore(): void {
+    const saved = this.state.get<SavedThread[]>(STORAGE_KEY, []);
+    for (const s of saved) {
+      if (!s.uri || !s.comments?.length) {
+        continue;
+      }
+      const range = new vscode.Range(s.line, 0, s.line, 0);
+      const thread = this.controller.createCommentThread(
+        vscode.Uri.parse(s.uri),
+        range,
+        s.comments.map((t) => new ReviewComment(t)),
+      );
+      thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+      this.threads.add(thread);
+    }
+  }
+
+  /** 現在の全スレッドを workspaceState に保存する（ローカル永続化）。 */
+  private persist(): void {
+    const saved: SavedThread[] = [];
+    for (const t of this.threads) {
+      if (t.comments.length === 0) {
+        continue;
+      }
+      saved.push({
+        uri: t.uri.toString(),
+        line: t.range?.start.line ?? 0,
+        comments: t.comments.map((c) =>
+          typeof c.body === 'string' ? c.body : c.body.value,
+        ),
+      });
+    }
+    void this.state.update(STORAGE_KEY, saved);
   }
 
   /** コメント widget の Submit から呼ばれる。スレッドへコメントを追加する。 */
@@ -46,6 +91,7 @@ export class CommentStore implements vscode.Disposable {
     thread.comments = [...thread.comments, new ReviewComment(reply.text)];
     thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
     this.threads.add(thread);
+    this.persist();
   }
 
   /** 保持中の全スレッドを返す（md 書き出し用）。 */
@@ -69,12 +115,13 @@ export class CommentStore implements vscode.Disposable {
     return n;
   }
 
-  /** 全スレッドを破棄する（Clear）。 */
+  /** 全スレッドを破棄する（Clear）。永続化もクリア。 */
   clear(): void {
     for (const thread of this.threads) {
       thread.dispose();
     }
     this.threads.clear();
+    this.persist();
   }
 
   /** 指定 worktree 配下のスレッドだけ破棄する。破棄した数を返す。 */
@@ -87,11 +134,18 @@ export class CommentStore implements vscode.Disposable {
         n++;
       }
     }
+    if (n > 0) {
+      this.persist();
+    }
     return n;
   }
 
   dispose(): void {
-    this.clear();
+    // 永続化は残す（再起動で復元するため）。UI スレッドのみ破棄。
+    for (const thread of this.threads) {
+      thread.dispose();
+    }
+    this.threads.clear();
     this.controller.dispose();
   }
 }

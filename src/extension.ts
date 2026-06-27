@@ -64,8 +64,8 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // コメント保持
-  const store = new CommentStore();
+  // コメント保持（workspaceState にローカル永続化。再起動で復元）。
+  const store = new CommentStore(context.workspaceState);
   context.subscriptions.push(store);
 
   // "Viewed" 永続化ストア
