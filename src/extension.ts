@@ -86,8 +86,30 @@ export function activate(context: vscode.ExtensionContext): void {
     viewed,
     baseStore,
     (fsPath) => store.listFor(fsPath),
+    (dirPath) => store.countUnder(dirPath),
     context.extensionUri,
   );
+
+  // ステータスバー: 未提出コメント数。クリックでコメント一覧へ。
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  statusBar.command = 'ponpokoReview.gotoComment';
+  context.subscriptions.push(statusBar);
+  const updateStatusBar = () => {
+    const n = store.total();
+    if (n > 0) {
+      statusBar.text = `$(comment) ${n}`;
+      statusBar.tooltip = `ponpoko-review: 未提出コメント ${n} 件`;
+      statusBar.show();
+    } else {
+      statusBar.hide();
+    }
+  };
+  updateStatusBar();
+  // コメント増減のたびにツリー＋ステータスバーを更新する共通処理。
+  const onCommentsChanged = () => {
+    treeProvider.softRefresh();
+    updateStatusBar();
+  };
 
   // コメント位置へ移動（diff を開いて該当行を表示）。
   const revealComment = async (uri: vscode.Uri, line: number): Promise<void> => {
@@ -242,7 +264,7 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.addComment',
       (reply: vscode.CommentReply) => {
         store.addComment(reply);
-        treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
+        onCommentsChanged();
       },
     ),
 
@@ -258,7 +280,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand('ponpokoReview.deleteComment', (c: vscode.Comment) => {
       store.deleteComment(c);
-      treeProvider.softRefresh(); // 💬 件数反映
+      onCommentsChanged();
     }),
     vscode.commands.registerCommand(
       'ponpokoReview.toggleResolve',
@@ -310,7 +332,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
       store.clear();
-      treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
+      onCommentsChanged();
       vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
 
@@ -340,7 +362,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         const n = store.clearUnder(node.worktree.path);
-        treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
+        onCommentsChanged();
         vscode.window.showInformationMessage(
           `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
         );

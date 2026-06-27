@@ -47,7 +47,12 @@ export interface CommentNode {
   info: CommentInfo;
 }
 
-export type DiffNode = WorktreeNode | DirNode | FileNode | CommentNode;
+export interface MessageNode {
+  kind: 'message';
+  label: string;
+}
+
+export type DiffNode = WorktreeNode | DirNode | FileNode | CommentNode | MessageNode;
 
 export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DiffNode | undefined | void>();
@@ -63,6 +68,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly baseStore: WorktreeBaseStore,
     /** ファイル(fsPath)に付いているコメント一覧を返す。 */
     private readonly commentsOf: (fsPath: string) => CommentInfo[],
+    /** ディレクトリ配下のコメント数（フォルダ/worktree 集計用）。 */
+    private readonly commentCountUnder: (dirPath: string) => number,
     /** 拡張のルート uri（status 文字アイコンの解決用）。 */
     private readonly extensionUri: vscode.Uri,
   ) {}
@@ -175,6 +182,11 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       );
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
+      // 配下のコメント数を集計表示（畳んでいても分かる）。
+      const cc = this.commentCountUnder(path.join(node.worktree.path, node.relDir));
+      if (cc > 0) {
+        item.description = `💬${cc}`;
+      }
       // 配下ファイルが全て viewed ならフォルダも checked。
       const files = this.filesUnder(node.worktree, node.relDir);
       const allViewed =
@@ -187,6 +199,11 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
     if (node.kind === 'comment') {
       return this.commentItem(node);
+    }
+    if (node.kind === 'message') {
+      const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
+      item.iconPath = new vscode.ThemeIcon('info');
+      return item;
     }
     return this.fileItem(node);
   }
@@ -220,8 +237,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
-    // 矢印はマージの向き（current を target に取り込む）。上書き時は ★ を付ける。
-    item.description = `current: ${current} → target: ${target}${overridden ? ' ★' : ''}`;
+    // 矢印はマージの向き（current を target に取り込む）。上書き時は ★、コメントは 💬N。
+    const cc = this.commentCountUnder(node.worktree.path);
+    item.description =
+      `current: ${current} → target: ${target}` +
+      (overridden ? ' ★' : '') +
+      (cc > 0 ? `   💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
@@ -291,12 +312,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       if (entries === null) {
         return [];
       }
-      if (this.mode === 'list') {
-        return [...entries]
-          .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-          .map((entry) => ({ kind: 'file', worktree: node.worktree, entry }));
-      }
-      return dirChildren(node.worktree, entries, '');
+      const children: DiffNode[] =
+        this.mode === 'list'
+          ? [...entries]
+              .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+              .map((entry) => ({ kind: 'file', worktree: node.worktree, entry }))
+          : dirChildren(node.worktree, entries, '');
+      return children.length > 0 ? children : [{ kind: 'message', label: '差分なし' }];
     }
 
     if (node.kind === 'dir') {

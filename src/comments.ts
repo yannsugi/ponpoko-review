@@ -191,6 +191,16 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads].filter((t) => isUnderPath(worktreePath, t.uri.fsPath));
   }
 
+  /** 指定ディレクトリ配下のコメント数（フォルダ/worktree 集計用）。 */
+  countUnder(dirPath: string): number {
+    return this.getThreadsUnder(dirPath).length;
+  }
+
+  /** 保持中のコメント総数。 */
+  total(): number {
+    return this.threads.size;
+  }
+
   /** 指定ファイル(uri.fsPath)に付いているコメントの一覧（行範囲＋本文）。行順。 */
   listFor(fsPath: string): { line: number; endLine: number; text: string }[] {
     const res: { line: number; endLine: number; text: string }[] = [];

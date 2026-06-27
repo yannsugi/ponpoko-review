@@ -58,6 +58,12 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "ponpokoReview.diffTree",
+        "contents": "Git リポジトリが見つからないか、worktree がありません。\nGit リポジトリのフォルダを開いてください。"
+      }
+    ],
     "commands": [
       {
         "command": "ponpokoReview.refresh",
