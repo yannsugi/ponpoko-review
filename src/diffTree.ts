@@ -60,6 +60,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   private mode: ViewMode = 'list';
   private commentsOnly = false;
+  private showComments = true;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
 
@@ -99,6 +100,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
    */
   softRefresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  getShowComments(): boolean {
+    return this.showComments;
+  }
+
+  /** ツリー上のコメント表示（子ノード・💬・フォルダ集計）をまとめてON/OFF。 */
+  setShowComments(on: boolean): void {
+    if (this.showComments !== on) {
+      this.showComments = on;
+      this._onDidChangeTreeData.fire();
+    }
   }
 
   getCommentsOnly(): boolean {
@@ -195,10 +208,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       );
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
-      // 配下のコメント数を集計表示（畳んでいても分かる）。
-      const cc = this.commentCountUnder(path.join(node.worktree.path, node.relDir));
+      // 配下のコメント数を集計表示（畳んでいても分かる）。フォルダ自体のコメントと
+      // 誤読しないよう「配下合計」と明記。showComments=false なら出さない。
+      const cc = this.showComments
+        ? this.commentCountUnder(path.join(node.worktree.path, node.relDir))
+        : 0;
       if (cc > 0) {
-        item.description = `💬${cc}`;
+        item.description = `💬${cc}（配下合計）`;
       }
       // 配下ファイルが全て viewed ならフォルダも checked。
       const files = this.filesUnder(node.worktree, node.relDir);
@@ -251,11 +267,11 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
     // 矢印はマージの向き（current を target に取り込む）。上書き時は ★、コメントは 💬N。
-    const cc = this.commentCountUnder(node.worktree.path);
+    const cc = this.showComments ? this.commentCountUnder(node.worktree.path) : 0;
     item.description =
       `current: ${current} → target: ${target}` +
       (overridden ? ' ★' : '') +
-      (cc > 0 ? `   💬${cc}` : '');
+      (cc > 0 ? `   💬${cc}（配下合計）` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
@@ -270,7 +286,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private fileItem(node: FileNode): vscode.TreeItem {
     const { entry } = node;
     const fsPath = path.join(node.worktree.path, entry.path);
-    const comments = this.commentsOf(fsPath);
+    const comments = this.showComments ? this.commentsOf(fsPath) : [];
     // tree モードはベース名、list モードはフルパスを表示。
     const label = this.mode === 'tree' ? entry.path.split('/').pop()! : entry.path;
     // コメントがあれば展開してコメント子ノードを出す。
@@ -355,6 +371,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
 
     if (node.kind === 'file') {
+      if (!this.showComments) {
+        return [];
+      }
       // ファイルの子＝そのファイルのコメント。
       const fsPath = path.join(node.worktree.path, node.entry.path);
       const uri = vscode.Uri.file(fsPath);

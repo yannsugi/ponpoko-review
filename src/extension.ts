@@ -142,8 +142,15 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.commentsOnly',
       treeProvider.getCommentsOnly(),
     );
+  const syncShowComments = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.showComments',
+      treeProvider.getShowComments(),
+    );
   syncViewMode();
   syncCommentsOnly();
+  syncShowComments();
   context.subscriptions.push(
     vscode.commands.registerCommand('ponpokoReview.viewAsTree', () => {
       treeProvider.setMode('tree');
@@ -160,6 +167,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('ponpokoReview.commentsFilterOff', () => {
       treeProvider.setCommentsOnly(false);
       syncCommentsOnly();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.hideComments', () => {
+      treeProvider.setShowComments(false);
+      syncShowComments();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.showComments', () => {
+      treeProvider.setShowComments(true);
+      syncShowComments();
     }),
   );
 
