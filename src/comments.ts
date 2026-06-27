@@ -22,6 +22,8 @@ class ReviewComment implements vscode.Comment {
 interface SavedThread {
   uri: string;
   line: number;
+  /** 範囲コメントの終端行(0-based, 生の range.end.line)。単一行は省略可。 */
+  endLine?: number;
   comments: string[];
 }
 
@@ -56,7 +58,7 @@ export class CommentStore implements vscode.Disposable {
       if (!s.uri || !s.comments?.length) {
         continue;
       }
-      const range = new vscode.Range(s.line, 0, s.line, 0);
+      const range = new vscode.Range(s.line, 0, s.endLine ?? s.line, 0);
       const thread = this.controller.createCommentThread(
         vscode.Uri.parse(s.uri),
         range,
@@ -77,6 +79,7 @@ export class CommentStore implements vscode.Disposable {
       saved.push({
         uri: t.uri.toString(),
         line: t.range?.start.line ?? 0,
+        endLine: t.range?.end.line ?? t.range?.start.line ?? 0,
         comments: t.comments.map((c) =>
           typeof c.body === 'string' ? c.body : c.body.value,
         ),
@@ -154,6 +157,22 @@ export class CommentStore implements vscode.Disposable {
 function isUnderPath(dir: string, fsPath: string): boolean {
   const rel = path.relative(dir, fsPath);
   return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * スレッドの行範囲(0-based, end は含む行)を返す。
+ * 複数行選択で終端が次行頭(character 0)になっている場合は1行戻して、見た目の選択行に合わせる。
+ */
+export function threadLineRange(thread: vscode.CommentThread): { start: number; end: number } {
+  const r = thread.range;
+  if (!r) {
+    return { start: 0, end: 0 };
+  }
+  let end = r.end.line;
+  if (end > r.start.line && r.end.character === 0) {
+    end -= 1;
+  }
+  return { start: r.start.line, end: Math.max(end, r.start.line) };
 }
 
 /** スレッドのコメント本文を結合して1つのテキストにする。 */

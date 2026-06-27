@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { Worktree } from './git';
-import { threadText } from './comments';
+import { threadLineRange, threadText } from './comments';
 import { worktreeName } from './diffTree';
 
 interface ReviewItem {
   relpath: string;
-  line: number; // 1-based (HEAD 基準)
+  line: number; // 1-based 開始行（HEAD 基準）
+  endLine: number; // 1-based 終了行（単一行なら line と同じ）
   body: string;
 }
 
@@ -69,10 +70,12 @@ export async function writeReview(opts: {
     const relpath = wt
       ? path.relative(wt.path, fsPath).split(path.sep).join('/')
       : fsPath;
-    const line = (thread.range?.start.line ?? 0) + 1; // 0-based → 1-based
+    const range = threadLineRange(thread); // 0-based, end含む
+    const line = range.start + 1; // 0-based → 1-based
+    const endLine = range.end + 1;
 
     const group = grouped.get(name) ?? { wt, items: [] };
-    group.items.push({ relpath, line, body });
+    group.items.push({ relpath, line, endLine, body });
     grouped.set(name, group);
     itemCount++;
   }
@@ -99,7 +102,9 @@ export async function writeReview(opts: {
 export function renderMarkdown(name: string, base: string, items: ReviewItem[]): string {
   const lines: string[] = [`# Review Instructions (${name})`, ''];
   for (const item of items) {
-    lines.push(`## ${item.relpath}:${item.line} (${base}...HEAD)`);
+    // 複数行選択は path:開始-終了、単一行は path:行。
+    const ref = item.endLine > item.line ? `${item.line}-${item.endLine}` : `${item.line}`;
+    lines.push(`## ${item.relpath}:${ref} (${base}...HEAD)`);
     lines.push(item.body);
     lines.push('');
   }
