@@ -142,7 +142,7 @@ export function activate(context: vscode.ExtensionContext): void {
           );
         }
       }
-      treeProvider.refresh();
+      treeProvider.softRefresh(); // viewed のみ変化 → git再取得せず再描画（ちらつき防止）
     }),
   );
 
@@ -167,7 +167,7 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.addComment',
       (reply: vscode.CommentReply) => {
         store.addComment(reply);
-        treeProvider.refresh(); // 💬 マーカー反映
+        treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
       },
     ),
 
@@ -178,7 +178,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
       store.clear();
-      treeProvider.refresh(); // 💬 マーカー反映
+      treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
       vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
 
@@ -206,7 +206,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         const n = store.clearUnder(node.worktree.path);
-        treeProvider.refresh(); // 💬 マーカー反映
+        treeProvider.softRefresh(); // 💬 マーカー反映（git再取得不要）
         vscode.window.showInformationMessage(
           `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
         );

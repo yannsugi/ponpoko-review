@@ -62,8 +62,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly decoration: StatusDecorationProvider,
   ) {}
 
+  /** 差分データから取り直す全更新（git diff 再実行）。保存・base変更時など。 */
   refresh(): void {
     this.cache.clear();
+    this._onDidChangeTreeData.fire();
+  }
+
+  /**
+   * キャッシュを保持したまま再描画のみ（git を叩かない）。
+   * チェック(viewed)やコメント数など、差分データが変わらない更新用。ちらつき防止。
+   */
+  softRefresh(): void {
     this._onDidChangeTreeData.fire();
   }
 
