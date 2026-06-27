@@ -208,11 +208,10 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       );
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
-      // 配下のコメント数を集計表示（畳んでいても分かる）。フォルダ自体のコメントと
-      // 誤読しないよう「配下合計」と明記。有無表示なので常時。
+      // 配下のコメント数を集計表示（畳んでいても分かる）。アイコン＋件数で集計と分かる。
       const cc = this.commentCountUnder(path.join(node.worktree.path, node.relDir));
       if (cc > 0) {
-        item.description = `💬${cc}（配下合計）`;
+        item.description = `💬${cc}`;
       }
       // 配下ファイルが全て viewed ならフォルダも checked。
       const files = this.filesUnder(node.worktree, node.relDir);
@@ -269,7 +268,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     item.description =
       `current: ${current} → target: ${target}` +
       (overridden ? ' ★' : '') +
-      (cc > 0 ? `   💬${cc}（配下合計）` : '');
+      (cc > 0 ? `   💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
