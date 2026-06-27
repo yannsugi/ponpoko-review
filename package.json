@@ -153,12 +153,12 @@
       {
         "command": "ponpokoReview.hideComments",
         "title": "ponpoko-review: ツリーのコメントを隠す",
-        "icon": "$(eye)"
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "ponpokoReview.showComments",
         "title": "ponpoko-review: ツリーにコメントを表示",
-        "icon": "$(eye-closed)"
+        "icon": "$(comment)"
       },
       {
         "command": "ponpokoReview.submitWorktree",
@@ -212,11 +212,6 @@
           "command": "ponpokoReview.settings",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@1"
-        },
-        {
-          "command": "ponpokoReview.gotoComment",
-          "when": "view == ponpokoReview.diffTree",
-          "group": "navigation@2"
         },
         {
           "command": "ponpokoReview.refresh",
