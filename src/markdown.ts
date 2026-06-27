@@ -47,14 +47,15 @@ function owningWorktree(fsPath: string, worktrees: Worktree[]): Worktree | undef
  */
 export async function writeReview(opts: {
   outputRoot: string;
-  base: string;
+  /** worktree パスごとに base(target)ブランチを解決する。 */
+  resolveBase: (worktreePath: string) => string;
   threads: vscode.CommentThread[];
   worktrees: Worktree[];
 }): Promise<WriteResult> {
-  const { outputRoot, base, threads, worktrees } = opts;
+  const { outputRoot, resolveBase, threads, worktrees } = opts;
 
-  // worktree 名 → レビュー項目
-  const grouped = new Map<string, ReviewItem[]>();
+  // worktree 名 → { worktree, レビュー項目 }
+  const grouped = new Map<string, { wt?: Worktree; items: ReviewItem[] }>();
   let itemCount = 0;
 
   for (const thread of threads) {
@@ -70,17 +71,19 @@ export async function writeReview(opts: {
       : fsPath;
     const line = (thread.range?.start.line ?? 0) + 1; // 0-based → 1-based
 
-    const list = grouped.get(name) ?? [];
-    list.push({ relpath, line, body });
-    grouped.set(name, list);
+    const group = grouped.get(name) ?? { wt, items: [] };
+    group.items.push({ relpath, line, body });
+    grouped.set(name, group);
     itemCount++;
   }
 
   const files: string[] = [];
 
-  for (const [name, items] of grouped) {
+  for (const [name, { wt, items }] of grouped) {
     items.sort((a, b) => (a.relpath === b.relpath ? a.line - b.line : a.relpath < b.relpath ? -1 : 1));
 
+    // この worktree の base を解決（個別上書き or グローバル）。
+    const base = wt ? resolveBase(wt.path) : resolveBase('');
     const md = renderMarkdown(name, base, items);
     const dir = vscode.Uri.file(path.join(outputRoot, name));
     const file = vscode.Uri.joinPath(dir, 'review.md');

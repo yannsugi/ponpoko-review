@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
 import { ViewedStore } from './viewed';
+import { WorktreeBaseStore } from './worktreeBase';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
@@ -53,6 +54,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   constructor(
     private readonly repoRoot: string,
     private readonly viewed: ViewedStore,
+    private readonly baseStore: WorktreeBaseStore,
   ) {}
 
   refresh(): void {
@@ -71,11 +73,30 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
   }
 
-  /** 設定から比較基準ブランチを読む（既定: main）。 */
-  getBase(): string {
+  /** グローバル設定の比較基準ブランチ（既定: main）。 */
+  getGlobalBase(): string {
     return vscode.workspace
       .getConfiguration('ponpokoReview')
       .get<string>('baseBranch', 'main');
+  }
+
+  /**
+   * 比較基準(base/target)ブランチを返す。
+   * worktreePath を渡すとその worktree の上書きを優先し、無ければグローバル設定。
+   */
+  getBase(worktreePath?: string): string {
+    if (worktreePath) {
+      const override = this.baseStore.get(worktreePath);
+      if (override) {
+        return override;
+      }
+    }
+    return this.getGlobalBase();
+  }
+
+  /** その worktree が個別 base を上書きしているか。 */
+  hasBaseOverride(worktreePath: string): boolean {
+    return this.baseStore.get(worktreePath) !== undefined;
   }
 
   getTreeItem(node: DiffNode): vscode.TreeItem {
@@ -101,17 +122,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       vscode.TreeItemCollapsibleState.Expanded,
     );
     // current = このworktreeのブランチ(変更元=git head), target = マージ先(=base)。
-    const target = this.getBase();
+    const target = this.getBase(node.worktree.path);
+    const overridden = this.hasBaseOverride(node.worktree.path);
     const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
-    // 矢印はマージの向き（current を target に取り込む）。
-    item.description = `current: ${current} → target: ${target}`;
+    // 矢印はマージの向き（current を target に取り込む）。上書き時は ★ を付ける。
+    item.description = `current: ${current} → target: ${target}${overridden ? ' ★' : ''}`;
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
         `current: \`${current}\`  （変更元 / git head）\n\n` +
-        `target: \`${target}\`  （マージ先 / base）\n\n` +
+        `target: \`${target}\`  （マージ先 / base${overridden ? '・このworktree個別設定 ★' : '・グローバル設定'}）\n\n` +
         `${node.worktree.path}`,
     );
     item.contextValue = 'ponpoko.worktree';
@@ -188,7 +210,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     if (cached) {
       return cached;
     }
-    const base = this.getBase();
+    const base = this.getBase(worktree.path);
     try {
       const entries = await diffNameStatus(base, worktree.path);
       this.cache.set(key, entries);

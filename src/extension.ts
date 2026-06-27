@@ -7,6 +7,7 @@ import { openDiff } from './openDiff';
 import { CommentStore } from './comments';
 import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
+import { WorktreeBaseStore } from './worktreeBase';
 
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -36,7 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       const result = await writeReview({
         outputRoot: resolveOutputRoot(),
-        base: treeProvider.getBase(),
+        resolveBase: (wtPath) => treeProvider.getBase(wtPath),
         threads,
         worktrees,
       });
@@ -69,9 +70,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // "Viewed" 永続化ストア
   const viewed = new ViewedStore(context.workspaceState);
+  // worktree ごとの比較先(base)上書きストア
+  const baseStore = new WorktreeBaseStore(context.workspaceState);
 
   // 差分ツリー
-  const treeProvider = new DiffTreeProvider(repoRoot, viewed);
+  const treeProvider = new DiffTreeProvider(repoRoot, viewed, baseStore);
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,
   });
@@ -129,7 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (node.kind !== 'file') {
         return;
       }
-      return openDiff(treeProvider.getBase(), node);
+      return openDiff(treeProvider.getBase(node.worktree.path), node);
     }),
 
     vscode.commands.registerCommand(
@@ -176,6 +179,37 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage(
           `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
         );
+      },
+    ),
+
+    // worktree 単位: 比較先(base/target)ブランチを個別設定/解除。
+    vscode.commands.registerCommand(
+      'ponpokoReview.setWorktreeBase',
+      async (node: WorktreeNode) => {
+        if (!node || node.kind !== 'worktree') {
+          return;
+        }
+        const wt = node.worktree;
+        let branches: string[] = [];
+        try {
+          branches = await listBranches(wt.path);
+        } catch {
+          // 取得失敗時はそのまま（候補なし）。
+        }
+        const GLOBAL = '$(globe) グローバル設定に従う（上書き解除）';
+        const current = treeProvider.getBase(wt.path);
+        const picked = await vscode.window.showQuickPick([GLOBAL, ...branches], {
+          placeHolder: `${worktreeName(wt)} の比較先(target)を選択（現在: ${current}）`,
+        });
+        if (picked === undefined) {
+          return;
+        }
+        if (picked === GLOBAL) {
+          await baseStore.clear(wt.path);
+        } else {
+          await baseStore.set(wt.path, picked);
+        }
+        treeProvider.refresh();
       },
     ),
 

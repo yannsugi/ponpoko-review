@@ -91,6 +91,11 @@
         "command": "ponpokoReview.clearWorktree",
         "title": "ponpoko-review: このworktreeのコメントをクリア",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "ponpokoReview.setWorktreeBase",
+        "title": "ponpoko-review: このworktreeの比較先(target)を設定",
+        "icon": "$(git-branch)"
       }
     ],
     "menus": {
@@ -127,6 +132,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "ponpokoReview.setWorktreeBase",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@0"
+        },
         {
           "command": "ponpokoReview.submitWorktree",
           "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
