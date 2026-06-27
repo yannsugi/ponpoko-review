@@ -33,11 +33,6 @@
           "type": "string",
           "default": ".ponpoko-review",
           "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md を書き出す。"
-        },
-        "ponpokoReview.reviewCommand": {
-          "type": "string",
-          "default": "claude -p",
-          "description": "Submit & Run で md を渡すコマンド。`cat <review.md> | <このコマンド>` として統合ターミナルで実行する。"
         }
       }
     },
@@ -74,11 +69,6 @@
         "command": "ponpokoReview.gotoComment",
         "title": "ponpoko-review: コメントへ移動",
         "icon": "$(comment)"
-      },
-      {
-        "command": "ponpokoReview.submitAndRun",
-        "title": "ponpoko-review: 書き出して claude -p に流す (Submit & Run)",
-        "icon": "$(run-all)"
       },
       {
         "command": "ponpokoReview.submit",
@@ -222,11 +212,6 @@
           "command": "ponpokoReview.submit",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@4"
-        },
-        {
-          "command": "ponpokoReview.submitAndRun",
-          "when": "view == ponpokoReview.diffTree",
-          "group": "navigation@4.5"
         },
         {
           "command": "ponpokoReview.clear",
