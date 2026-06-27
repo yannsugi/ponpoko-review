@@ -33,14 +33,14 @@ export interface FileNode {
 
 export type DiffNode = WorktreeNode | DirNode | FileNode;
 
-const STATUS_ICON: Record<FileStatus, { icon: string; color: string }> = {
-  A: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
-  M: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
-  D: { icon: 'diff-removed', color: 'gitDecoration.deletedResourceForeground' },
-  R: { icon: 'diff-renamed', color: 'gitDecoration.renamedResourceForeground' },
-  C: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
-  T: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
-  U: { icon: 'diff-ignored', color: 'gitDecoration.conflictingResourceForeground' },
+const STATUS_LABEL: Record<FileStatus, string> = {
+  A: 'A 追加',
+  M: 'M 変更',
+  D: 'D 削除',
+  R: 'R 改名',
+  C: 'C 複製',
+  T: 'T 型変更',
+  U: 'U 競合',
 };
 
 export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
@@ -108,7 +108,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         node.label,
         vscode.TreeItemCollapsibleState.Expanded,
       );
-      item.iconPath = vscode.ThemeIcon.Folder;
+      // resourceUri＋collapsibleState で、アイコンテーマのフォルダアイコン
+      // （src/media 等の名前別アイコンも）が出て可視性が上がる。iconPathは付けない。
       item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, node.relDir));
       item.contextValue = 'ponpoko.dir';
       return item;
@@ -146,16 +147,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const label = this.mode === 'tree' ? entry.path.split('/').pop()! : entry.path;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
-    const deco = STATUS_ICON[entry.status] ?? STATUS_ICON.M;
-    item.iconPath = new vscode.ThemeIcon(
-      deco.icon,
-      new vscode.ThemeColor(isViewed ? 'disabledForeground' : deco.color),
-    );
+    // resourceUri でアイコンテーマのファイルタイプ別アイコン（.ts/.md/.json 等）を出す。
+    item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, entry.path));
+    // 状態(A/M/D/R)は色付きバッジ風に description 先頭へ。viewed は ✓ 付き淡色。
+    const status = STATUS_LABEL[entry.status] ?? entry.status;
     item.description =
-      (isViewed ? '✓ 表示済み · ' : '') +
-      entry.status +
-      (entry.oldPath ? ` ← ${entry.oldPath}` : '');
-    item.tooltip = entry.oldPath ? `${entry.oldPath} → ${entry.path}` : entry.path;
+      `${status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}` +
+      (isViewed ? '  ✓ 表示済み' : '');
+    item.tooltip = new vscode.MarkdownString(
+      `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
+        `status: \`${entry.status}\`${isViewed ? ' ・ ✓ 表示済み' : ''}`,
+    );
     item.contextValue = 'ponpoko.file';
     item.checkboxState = isViewed
       ? vscode.TreeItemCheckboxState.Checked
