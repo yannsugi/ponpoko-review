@@ -165,14 +165,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     // resourceUri でアイコンテーマのファイルタイプ別アイコン（.ts/.md/.json 等）を出す。
     item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, entry.path));
-    // 状態(A/M/D/R)は色付きバッジ風に description 先頭へ。viewed は ✓ 付き淡色。
+    // 状態(A/M/D/R)を description に。viewed はチェックボックスで分かるので表記しない。
     const status = STATUS_LABEL[entry.status] ?? entry.status;
-    item.description =
-      `${status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}` +
-      (isViewed ? '  ✓ 表示済み' : '');
+    item.description = `${status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}`;
     item.tooltip = new vscode.MarkdownString(
       `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
-        `status: \`${entry.status}\`${isViewed ? ' ・ ✓ 表示済み' : ''}`,
+        `status: \`${entry.status}\``,
     );
     item.contextValue = 'ponpoko.file';
     item.checkboxState = isViewed
