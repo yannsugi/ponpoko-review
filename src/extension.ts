@@ -9,6 +9,11 @@ import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 
+/** シェル安全のため単一引用符で囲む（内部の ' は '\'' でエスケープ）。 */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!repoRoot) {
@@ -234,6 +239,43 @@ export function activate(context: vscode.ExtensionContext): void {
       const worktrees = await worktreeList(repoRoot);
       // 上部Submitは全worktreeを1ファイルにまとめて出力。
       await runSubmit(store.getThreads(), worktrees, '', true);
+    }),
+
+    // 書き出して、その md を統合ターミナルで `claude -p` 等に流す。
+    vscode.commands.registerCommand('ponpokoReview.submitAndRun', async () => {
+      const threads = store.getThreads();
+      if (threads.length === 0) {
+        vscode.window.showWarningMessage('ponpoko-review: コメントがありません。');
+        return;
+      }
+      const worktrees = await worktreeList(repoRoot);
+      let result;
+      try {
+        result = await writeReview({
+          outputRoot: resolveOutputRoot(),
+          resolveBase: (wtPath) => treeProvider.getBase(wtPath),
+          threads,
+          worktrees,
+          combined: true,
+        });
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+      }
+      if (result.files.length === 0) {
+        return;
+      }
+      const rel = path.relative(repoRoot, result.files[0]) || result.files[0];
+      const cmd = vscode.workspace
+        .getConfiguration('ponpokoReview')
+        .get<string>('reviewCommand', 'claude -p');
+      const term =
+        vscode.window.terminals.find((t) => t.name === 'ponpoko-review') ??
+        vscode.window.createTerminal('ponpoko-review');
+      term.show();
+      term.sendText(`cat ${shellQuote(rel)} | ${cmd}`);
     }),
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
