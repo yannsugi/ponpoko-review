@@ -85,9 +85,25 @@ export function activate(context: vscode.ExtensionContext): void {
     repoRoot,
     viewed,
     baseStore,
-    (fsPath) => store.countFor(fsPath),
+    (fsPath) => store.listFor(fsPath),
     context.extensionUri,
   );
+
+  // コメント位置へ移動（diff を開いて該当行を表示）。
+  const revealComment = async (uri: vscode.Uri, line: number): Promise<void> => {
+    const node = await treeProvider.resolveFileNode(uri);
+    if (node) {
+      await openDiff(treeProvider.getBase(node.worktree.path), node);
+    } else {
+      await vscode.window.showTextDocument(uri);
+    }
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const pos = new vscode.Position(line, 0);
+      editor.selection = new vscode.Selection(pos, pos);
+      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    }
+  };
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,
     // フォルダ↔ファイルの伝播は viewed ストアを正として自前で管理する。
@@ -213,19 +229,14 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!picked) {
         return;
       }
-      const node = await treeProvider.resolveFileNode(picked.uri);
-      if (node) {
-        await openDiff(treeProvider.getBase(node.worktree.path), node);
-      } else {
-        await vscode.window.showTextDocument(picked.uri);
-      }
-      const editor = vscode.window.activeTextEditor;
-      if (editor) {
-        const pos = new vscode.Position(picked.line, 0);
-        editor.selection = new vscode.Selection(pos, pos);
-        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
-      }
+      await revealComment(picked.uri, picked.line);
     }),
+
+    // ツリーのコメント子ノードクリック → 該当行へ。
+    vscode.commands.registerCommand(
+      'ponpokoReview.openComment',
+      (arg: { uri: vscode.Uri; line: number }) => revealComment(arg.uri, arg.line),
+    ),
 
     vscode.commands.registerCommand(
       'ponpokoReview.addComment',

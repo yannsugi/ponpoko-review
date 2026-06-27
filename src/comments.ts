@@ -191,15 +191,17 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads].filter((t) => isUnderPath(worktreePath, t.uri.fsPath));
   }
 
-  /** 指定ファイル(uri.fsPath)に付いているコメントスレッド数（＝コメント行数）。 */
-  countFor(fsPath: string): number {
-    let n = 0;
+  /** 指定ファイル(uri.fsPath)に付いているコメントの一覧（行範囲＋本文）。行順。 */
+  listFor(fsPath: string): { line: number; endLine: number; text: string }[] {
+    const res: { line: number; endLine: number; text: string }[] = [];
     for (const t of this.threads) {
       if (t.uri.fsPath === fsPath && t.comments.length > 0) {
-        n++;
+        const r = threadLineRange(t);
+        res.push({ line: r.start, endLine: r.end, text: threadText(t) });
       }
     }
-    return n;
+    res.sort((a, b) => a.line - b.line);
+    return res;
   }
 
   /** 全スレッドを破棄する（Clear）。永続化もクリア。 */

@@ -34,7 +34,20 @@ export interface FileNode {
   entry: DiffEntry;
 }
 
-export type DiffNode = WorktreeNode | DirNode | FileNode;
+export interface CommentInfo {
+  line: number; // 0-based 開始行
+  endLine: number; // 0-based 終了行
+  text: string;
+}
+
+export interface CommentNode {
+  kind: 'comment';
+  worktree: Worktree;
+  uri: vscode.Uri;
+  info: CommentInfo;
+}
+
+export type DiffNode = WorktreeNode | DirNode | FileNode | CommentNode;
 
 export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DiffNode | undefined | void>();
@@ -48,8 +61,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly repoRoot: string,
     private readonly viewed: ViewedStore,
     private readonly baseStore: WorktreeBaseStore,
-    /** ファイル(fsPath)に付いているコメント数を返す。 */
-    private readonly commentCountOf: (fsPath: string) => number,
+    /** ファイル(fsPath)に付いているコメント一覧を返す。 */
+    private readonly commentsOf: (fsPath: string) => CommentInfo[],
     /** 拡張のルート uri（status 文字アイコンの解決用）。 */
     private readonly extensionUri: vscode.Uri,
   ) {}
@@ -172,7 +185,28 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         : vscode.TreeItemCheckboxState.Unchecked;
       return item;
     }
+    if (node.kind === 'comment') {
+      return this.commentItem(node);
+    }
     return this.fileItem(node);
+  }
+
+  private commentItem(node: CommentNode): vscode.TreeItem {
+    const { info } = node;
+    const ref =
+      info.endLine > info.line ? `${info.line + 1}-${info.endLine + 1}` : `${info.line + 1}`;
+    const first = info.text.split('\n')[0] || '(空コメント)';
+    const item = new vscode.TreeItem(first, vscode.TreeItemCollapsibleState.None);
+    item.description = `:${ref}`;
+    item.iconPath = new vscode.ThemeIcon('comment');
+    item.tooltip = new vscode.MarkdownString(info.text);
+    item.contextValue = 'ponpoko.comment';
+    item.command = {
+      command: 'ponpokoReview.openComment',
+      title: 'Open Comment',
+      arguments: [{ uri: node.uri, line: info.line }],
+    };
+    return item;
   }
 
   private worktreeItem(node: WorktreeNode): vscode.TreeItem {
@@ -201,18 +235,24 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   private fileItem(node: FileNode): vscode.TreeItem {
     const { entry } = node;
+    const fsPath = path.join(node.worktree.path, entry.path);
+    const comments = this.commentsOf(fsPath);
     // tree モードはベース名、list モードはフルパスを表示。
     const label = this.mode === 'tree' ? entry.path.split('/').pop()! : entry.path;
-    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    // コメントがあれば展開してコメント子ノードを出す。
+    const item = new vscode.TreeItem(
+      label,
+      comments.length > 0
+        ? vscode.TreeItemCollapsibleState.Collapsed
+        : vscode.TreeItemCollapsibleState.None,
+    );
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
-    const fsPath = path.join(node.worktree.path, entry.path);
     // status を表す文字アイコン(A/M/D/R…)。viewed はグレー。
     item.iconPath = this.statusIcon(entry.status, isViewed);
     // description はコメント💬とリネーム元のみ。
-    const comments = this.commentCountOf(fsPath);
     const parts: string[] = [];
-    if (comments > 0) {
-      parts.push(`💬${comments}`);
+    if (comments.length > 0) {
+      parts.push(`💬${comments.length}`);
     }
     if (entry.oldPath) {
       parts.push(`← ${entry.oldPath}`);
@@ -221,7 +261,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     item.tooltip = new vscode.MarkdownString(
       `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
         `status: \`${entry.status}\`` +
-        (comments > 0 ? ` ・ 💬 コメント ${comments} 件` : ''),
+        (comments.length > 0 ? ` ・ 💬 コメント ${comments.length} 件` : ''),
     );
     item.contextValue = 'ponpoko.file';
     item.checkboxState = isViewed
@@ -265,6 +305,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         return [];
       }
       return dirChildren(node.worktree, entries, node.relDir);
+    }
+
+    if (node.kind === 'file') {
+      // ファイルの子＝そのファイルのコメント。
+      const fsPath = path.join(node.worktree.path, node.entry.path);
+      const uri = vscode.Uri.file(fsPath);
+      return this.commentsOf(fsPath).map((info) => ({
+        kind: 'comment',
+        worktree: node.worktree,
+        uri,
+        info,
+      }));
     }
 
     return [];
