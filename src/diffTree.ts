@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
+import { DiffEntry, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 
@@ -32,16 +32,6 @@ export interface FileNode {
 }
 
 export type DiffNode = WorktreeNode | DirNode | FileNode;
-
-const STATUS_LABEL: Record<FileStatus, string> = {
-  A: 'A 追加',
-  M: 'M 変更',
-  D: 'D 削除',
-  R: 'R 改名',
-  C: 'C 複製',
-  T: 'T 型変更',
-  U: 'U 競合',
-};
 
 export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DiffNode | undefined | void>();
@@ -165,9 +155,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     // resourceUri でアイコンテーマのファイルタイプ別アイコン（.ts/.md/.json 等）を出す。
     item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, entry.path));
-    // 状態(A/M/D/R)を description に。viewed はチェックボックスで分かるので表記しない。
-    const status = STATUS_LABEL[entry.status] ?? entry.status;
-    item.description = `${status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}`;
+    // 状態は A/M/D/R の1文字だけ。viewed はチェックボックスで分かるので表記しない。
+    item.description = `${entry.status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}`;
     item.tooltip = new vscode.MarkdownString(
       `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
         `status: \`${entry.status}\``,
