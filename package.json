@@ -6,6 +6,10 @@
   "publisher": "yannsugi",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yannsugi/ponpoko-review.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -284,6 +288,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.4.0"
   }
 }

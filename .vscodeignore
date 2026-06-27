@@ -3,6 +3,13 @@ src/**
 test/**
 media/*.gen.js
 **/*.drawio
+media/README.md
+media/ponpoko.svg
+media/*.png
+media/*.jpeg
+media/*.jpg
+**/*.map
+node_modules/**
 .gitignore
 .vscodeignore
 tsconfig.json
