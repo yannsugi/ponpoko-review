@@ -211,7 +211,7 @@
         {
           "command": "ponpokoReview.settings",
           "when": "view == ponpokoReview.diffTree",
-          "group": "navigation@1"
+          "group": "navigation@9"
         },
         {
           "command": "ponpokoReview.refresh",
