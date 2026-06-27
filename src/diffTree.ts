@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHashes, worktreeList } from './git';
+import { DiffEntry, Worktree, diffNameStatus, viewHashes, worktreeList } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 
@@ -9,16 +9,8 @@ export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
-/** status を表す色付きアイコン（tree で構成は分かるのでファイルタイプアイコンは使わない）。 */
-const STATUS_ICON: Record<FileStatus, { icon: string; color: string }> = {
-  A: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
-  M: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
-  D: { icon: 'diff-removed', color: 'gitDecoration.deletedResourceForeground' },
-  R: { icon: 'diff-renamed', color: 'gitDecoration.renamedResourceForeground' },
-  C: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
-  T: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
-  U: { icon: 'diff-ignored', color: 'gitDecoration.conflictingResourceForeground' },
-};
+/** status 文字アイコン(media/status/<s>.svg)を持つ status 集合。 */
+const STATUS_ICON_KEYS = new Set(['a', 'm', 'd', 'r', 'c', 't', 'u']);
 
 export type ViewMode = 'list' | 'tree';
 
@@ -58,7 +50,21 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly baseStore: WorktreeBaseStore,
     /** ファイル(fsPath)に付いているコメント数を返す。 */
     private readonly commentCountOf: (fsPath: string) => number,
+    /** 拡張のルート uri（status 文字アイコンの解決用）。 */
+    private readonly extensionUri: vscode.Uri,
   ) {}
+
+  /** status 文字アイコン(A/M/D/R…)の uri。viewed はグレーの -dim 版。 */
+  private statusIcon(status: string, viewed: boolean): vscode.Uri {
+    const k = (status || 'M').toLowerCase();
+    const key = STATUS_ICON_KEYS.has(k) ? k : 'm';
+    return vscode.Uri.joinPath(
+      this.extensionUri,
+      'media',
+      'status',
+      `${key}${viewed ? '-dim' : ''}.svg`,
+    );
+  }
 
   /** 差分データから取り直す全更新（git diff 再実行）。保存・base変更時など。 */
   refresh(): void {
@@ -173,12 +179,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     const fsPath = path.join(node.worktree.path, entry.path);
-    // status を表す色付きアイコン。viewed は淡色化で de-emphasize。
-    const deco = STATUS_ICON[entry.status] ?? STATUS_ICON.M;
-    item.iconPath = new vscode.ThemeIcon(
-      deco.icon,
-      new vscode.ThemeColor(isViewed ? 'disabledForeground' : deco.color),
-    );
+    // status を表す文字アイコン(A/M/D/R…)。viewed はグレー。
+    item.iconPath = this.statusIcon(entry.status, isViewed);
     // description はコメント💬とリネーム元のみ。
     const comments = this.commentCountOf(fsPath);
     const parts: string[] = [];

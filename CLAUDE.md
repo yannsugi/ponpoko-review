@@ -24,7 +24,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。
   - viewed チェックボックス。フォルダは配下全 viewed で checked（`manageCheckboxStateManually:true` で自前管理）。
   - worktree ごとの差分を `cache`（refresh 単位）。`refresh()`=cache破棄+git再取得、`softRefresh()`=再描画のみ（viewed/コメント変化用、ちらつき防止）。
-  - ファイルアイコンは色付き status アイコン（A/M/D/R）。viewed は淡色化。
+  - ファイルアイコンは status 文字アイコン（`media/status/<a|m|d|r|c|t|u>.svg` を `iconPath` に。viewed は `-dim` グレー版）。
 - `src/baseContentProvider.ts` — スキーム `ponpoko-review-base:` で `git show base:path` を供給。追加/欠落は空ドキュメント。
 - `src/openDiff.ts` — `vscode.diff`。left=base仮想doc / **right=作業ツリーの実ファイル**。A は left 空、D は right 空、R は旧パス参照。
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。

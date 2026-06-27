@@ -81,6 +81,7 @@ export function activate(context: vscode.ExtensionContext): void {
     viewed,
     baseStore,
     (fsPath) => store.countFor(fsPath),
+    context.extensionUri,
   );
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,
