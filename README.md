@@ -57,9 +57,10 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 - コメントを付けたファイルには `💬件数` を表示。
 
 ### 出力
-- worktree 単位で `.ponpoko-review/<worktree名>/review.md` に分割出力。
-- 見出しは `path:line (base...HEAD)` 形式。
-- ツリー上部の Submit/Clear は全体、各 worktree 行のアイコンはその worktree だけを Submit/Clear。
+- **上部の Submit**: 全 worktree を**1ファイルにまとめて** `.ponpoko-review/review.md` に出力。
+- **各 worktree 行の Submit**: その worktree だけを `.ponpoko-review/<worktree名>/review.md` に出力。
+- 見出しは `path:line (base...HEAD)` 形式（複数行選択は `path:開始-終了`）。
+- Clear も同様に、上部は全体、worktree 行はその worktree だけ。
 
 ### worktree ごとの比較先
 - worktree 行の 🌿 アイコンから、その worktree だけ別ブランチと比較できる。

@@ -29,6 +29,7 @@ export function activate(context: vscode.ExtensionContext): void {
     threads: vscode.CommentThread[],
     worktrees: Worktree[],
     emptyLabel: string,
+    combined: boolean,
   ): Promise<void> => {
     if (threads.length === 0) {
       vscode.window.showWarningMessage(`ponpoko-review: ${emptyLabel}コメントがありません。`);
@@ -40,6 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
         resolveBase: (wtPath) => treeProvider.getBase(wtPath),
         threads,
         worktrees,
+        combined,
       });
       const choice = await vscode.window.showInformationMessage(
         `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
@@ -185,7 +187,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('ponpokoReview.submit', async () => {
       const worktrees = await worktreeList(repoRoot);
-      await runSubmit(store.getThreads(), worktrees, '');
+      // 上部Submitは全worktreeを1ファイルにまとめて出力。
+      await runSubmit(store.getThreads(), worktrees, '', true);
     }),
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
@@ -202,10 +205,12 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         const wt = node.worktree;
+        // worktree行のSubmitはそのworktreeだけを分割出力。
         await runSubmit(
           store.getThreadsUnder(wt.path),
           [wt],
           `${worktreeName(wt)} に `,
+          false,
         );
       },
     ),

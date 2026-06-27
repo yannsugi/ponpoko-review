@@ -30,7 +30,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
-- `src/markdown.ts` — `writeReview`。worktree 単位で `<outputRoot>/<worktree名>/review.md`。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。
+- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
 ## 守るべき不変条件（罠）

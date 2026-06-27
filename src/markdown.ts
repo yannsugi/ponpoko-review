@@ -52,8 +52,10 @@ export async function writeReview(opts: {
   resolveBase: (worktreePath: string) => string;
   threads: vscode.CommentThread[];
   worktrees: Worktree[];
+  /** true: 全worktreeを1ファイル(<outputRoot>/review.md)にまとめる。false: worktree毎に分割。 */
+  combined?: boolean;
 }): Promise<WriteResult> {
-  const { outputRoot, resolveBase, threads, worktrees } = opts;
+  const { outputRoot, resolveBase, threads, worktrees, combined = false } = opts;
 
   // worktree 名 → { worktree, レビュー項目 }
   const grouped = new Map<string, { wt?: Worktree; items: ReviewItem[] }>();
@@ -80,12 +82,30 @@ export async function writeReview(opts: {
     itemCount++;
   }
 
-  const files: string[] = [];
-
-  for (const [name, { wt, items }] of grouped) {
+  const sortItems = (items: ReviewItem[]) =>
     items.sort((a, b) => (a.relpath === b.relpath ? a.line - b.line : a.relpath < b.relpath ? -1 : 1));
 
-    // この worktree の base を解決（個別上書き or グローバル）。
+  const files: string[] = [];
+
+  if (combined) {
+    // 全worktreeを1ファイルにまとめる（<outputRoot>/review.md）。
+    const sections: string[] = [];
+    for (const [name, { wt, items }] of grouped) {
+      sortItems(items);
+      const base = wt ? resolveBase(wt.path) : resolveBase('');
+      sections.push(renderMarkdown(name, base, items));
+    }
+    const dir = vscode.Uri.file(outputRoot);
+    const file = vscode.Uri.joinPath(dir, 'review.md');
+    await vscode.workspace.fs.createDirectory(dir);
+    await vscode.workspace.fs.writeFile(file, Buffer.from(sections.join('\n'), 'utf8'));
+    files.push(file.fsPath);
+    return { files, itemCount };
+  }
+
+  // worktree毎に分割（<outputRoot>/<worktree名>/review.md）。
+  for (const [name, { wt, items }] of grouped) {
+    sortItems(items);
     const base = wt ? resolveBase(wt.path) : resolveBase('');
     const md = renderMarkdown(name, base, items);
     const dir = vscode.Uri.file(path.join(outputRoot, name));
