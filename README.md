@@ -28,12 +28,22 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 
 1. アクティビティバーの 🦝 を開くと、worktree ごとに差分ツリーが出る。
 2. ファイルをクリック → `base` 側 vs 作業ツリーの diff が開く。
-3. diff の行にインラインコメント（修正指示）を付ける。
+3. diff の行（複数行選択も可）にインラインコメント（修正指示）を付ける。
    - コメントは必ず右（HEAD 側＝作業ファイル）に付く。行番号がズレない。
-4. Submit（✓）で `.ponpoko-review/<worktree名>/review.md` に書き出す。
+   - 後から ✎編集 / 🗑削除 / Resolve できる。
+4. Submit（✓）で `review.md` に書き出し、**自動でそのファイルが開く**。
 5. その md を `claude -p` に渡し、修正は Claude Code に任せる。
 
-> 起動は `F5`（Extension Development Host）。常用するなら `vsce package` → `code --install-extension *.vsix`。
+## インストール
+
+```sh
+npm install
+npm run compile
+npx vsce package                              # → ponpoko-review-x.y.z.vsix
+code --install-extension ponpoko-review-*.vsix
+```
+
+開発中は `F5`（Extension Development Host）で起動。
 
 ---
 
@@ -44,7 +54,10 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 - 各 worktree に `current: <ブランチ> → target: <base>` を表示し、何と何を比較しているかが分かる。
 - 比較はマージベース → 作業ツリー。コミット済みに加え、**未コミットの編集・削除・未追跡ファイル**も出る。
 
+- ファイルの状態は色付きの文字アイコン（`A`/`M`/`D`/`R`）で表示。
+
 ### リスト / ツリー表示の切替
+- ツールバーのボタン1つで **list ⇄ tree を順次切り替え**。
 - **list**: フラットにフルパス一覧。
 - **tree**: フォルダ階層でまとめる。`src/handlers` のような一本道は畳んで表示。
 
@@ -53,8 +66,14 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 - **チェックした時点から中身が変わると自動でチェックが外れる**。
 - フォルダは配下が全てチェックされると自動でチェック。フォルダをチェックすれば配下を一括チェック。
 
-### コメントマーカー
-- コメントを付けたファイルには `💬件数` を表示。
+### コメント
+- コメントを付けたファイルに `💬件数`、フォルダ/worktree には `💬N（配下合計）` を表示。
+- ファイルを展開すると**コメント本文が子ノード**で並び、クリックで該当行へジャンプ。
+- 個別に **✎編集 / 🗑削除 / Resolve** が可能。
+- ツールバーで切り替え:
+  - **コメントマーク**: ファイル配下のコメント子ノードの展開 ON/OFF（💬 自体は常時表示）。
+  - **絞り込み($(filter))**: コメントのあるファイルだけに絞る。
+- **クイックアクセス**: ステータスバーの未提出コメント数をクリック、またはコマンド「コメントへ移動」で、全コメントを一覧 → 選んでジャンプ。
 
 ### 出力
 - **上部の Submit**: 全 worktree を**1ファイルにまとめて** `.ponpoko-review/review.md` に出力。
@@ -88,9 +107,11 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 ## src/handlers/user_handler.rs:42 (main...HEAD)
 Service層を経由するように。Handlerから直接Repositoryを叩かないこと。
 
-## web/components/StockList.tsx:15 (main...HEAD)
-ローディング状態のハンドリングを追加。
+## web/components/StockList.tsx:15-23 (main...HEAD)
+このブロックのローディング状態のハンドリングを追加。
 ```
+
+（`:15-23` のように複数行選択のコメントは範囲で出る）
 
 ---
 
@@ -99,6 +120,15 @@ Service層を経由するように。Handlerから直接Repositoryを叩かな�
 - git はすべてシェルを介さず実行（`execFile`）。コマンドインジェクションを避ける。
 - ブランチ/リビジョン指定は `-` 始まりや制御文字を弾くバリデーション付き。
 - 未信頼ワークスペースでは動かない（`untrustedWorkspaces: false`）。
+
+---
+
+## 開発 / テスト
+
+- `npm run compile` … TypeScript ビルド（`out/`）。
+- `npm test` … 純粋関数のユニットテスト（`node:test`。git パース / ツリー構築 / 見出し整形など）。
+- `npx vsce package` … vsix 化。
+- 実機の通し確認は [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) のチェックリストで。
 
 ---
 
