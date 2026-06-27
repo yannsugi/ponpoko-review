@@ -108,9 +108,10 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         node.label,
         vscode.TreeItemCollapsibleState.Expanded,
       );
-      // resourceUri＋collapsibleState で、アイコンテーマのフォルダアイコン
-      // （src/media 等の名前別アイコンも）が出て可視性が上がる。iconPathは付けない。
+      // ThemeIcon.Folder はアイコンテーマのフォルダ絵で確実に描画される。
+      // resourceUri も付けて名前別フォルダアイコン対応テーマでも効くように。
       item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, node.relDir));
+      item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
       return item;
     }
