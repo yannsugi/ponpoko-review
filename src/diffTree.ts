@@ -9,6 +9,16 @@ export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
+/**
+ * アイコンテーマのファイルタイプ別アイコンは出しつつ、VS Code 標準の git 装飾
+ * （U/M 色バッジ）を抑制するための uri。
+ * file: スキームだと git 拡張の FileDecorationProvider が装飾を付けてしまうので、
+ * 拡張子はそのままに別スキームへ差し替える（アイコンはパスの拡張子で解決される）。
+ */
+function iconUri(fsPath: string): vscode.Uri {
+  return vscode.Uri.file(fsPath).with({ scheme: 'ponpoko-file' });
+}
+
 export type ViewMode = 'list' | 'tree';
 
 export interface WorktreeNode {
@@ -108,8 +118,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         vscode.TreeItemCollapsibleState.Expanded,
       );
       // ThemeIcon.Folder はアイコンテーマのフォルダ絵で確実に描画される。
-      // resourceUri も付けて名前別フォルダアイコン対応テーマでも効くように。
-      item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, node.relDir));
+      // resourceUri はカスタムスキームにして git 標準装飾を抑制（フォルダアイコンは
+      // ThemeIcon.Folder 側で出る）。
+      item.resourceUri = iconUri(path.join(node.worktree.path, node.relDir));
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
       // 配下ファイルが全て viewed ならフォルダも checked。
@@ -156,8 +167,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     const fsPath = path.join(node.worktree.path, entry.path);
-    // resourceUri でアイコンテーマのファイルタイプ別アイコン（.ts/.md/.json 等）を出す。
-    item.resourceUri = vscode.Uri.file(fsPath);
+    // ファイルタイプ別アイコンは出しつつ、git 標準装飾(U/M バッジ)は抑制する。
+    item.resourceUri = iconUri(fsPath);
     // コメントが付いていれば 💬＋件数を先頭に。続けて git状態 A/M/D/R。
     const comments = this.commentCountOf(fsPath);
     const commentMark = comments > 0 ? `💬${comments}  ` : '';
