@@ -89,6 +89,29 @@
         "title": "ponpoko-review: コメントを追加"
       },
       {
+        "command": "ponpokoReview.editComment",
+        "title": "編集",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "ponpokoReview.saveComment",
+        "title": "保存"
+      },
+      {
+        "command": "ponpokoReview.cancelComment",
+        "title": "キャンセル"
+      },
+      {
+        "command": "ponpokoReview.deleteComment",
+        "title": "削除",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "ponpokoReview.toggleResolve",
+        "title": "Resolve / Unresolve",
+        "icon": "$(pass)"
+      },
+      {
         "command": "ponpokoReview.setBase",
         "title": "ponpoko-review: 既定の比較先(base)を選択"
       },
@@ -191,6 +214,37 @@
         {
           "command": "ponpokoReview.addComment",
           "group": "inline"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "ponpokoReview.toggleResolve",
+          "when": "commentController == ponpokoReview",
+          "group": "inline@1"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "ponpokoReview.editComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "group@1"
+        },
+        {
+          "command": "ponpokoReview.deleteComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "group@2"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "ponpokoReview.saveComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.cancelComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "inline@2"
         }
       ]
     }

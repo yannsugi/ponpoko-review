@@ -1,14 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+let commentSeq = 0;
+
 /** 1コメント = 1修正指示。 */
 class ReviewComment implements vscode.Comment {
-  body: vscode.MarkdownString;
+  id: number;
+  body: string | vscode.MarkdownString;
   mode = vscode.CommentMode.Preview;
   author: vscode.CommentAuthorInformation = { name: 'ponpoko-review' };
+  contextValue = 'canEdit'; // メニューの when 句用
+  savedBody: string | vscode.MarkdownString;
 
-  constructor(text: string) {
+  constructor(
+    text: string,
+    public parent?: vscode.CommentThread,
+  ) {
+    this.id = ++commentSeq;
     this.body = new vscode.MarkdownString(text);
+    this.savedBody = this.body;
   }
 }
 
@@ -25,6 +35,7 @@ interface SavedThread {
   /** 範囲コメントの終端行(0-based, 生の range.end.line)。単一行は省略可。 */
   endLine?: number;
   comments: string[];
+  resolved?: boolean;
 }
 
 const STORAGE_KEY = 'ponpoko.comments';
@@ -59,12 +70,12 @@ export class CommentStore implements vscode.Disposable {
         continue;
       }
       const range = new vscode.Range(s.line, 0, s.endLine ?? s.line, 0);
-      const thread = this.controller.createCommentThread(
-        vscode.Uri.parse(s.uri),
-        range,
-        s.comments.map((t) => new ReviewComment(t)),
-      );
+      const thread = this.controller.createCommentThread(vscode.Uri.parse(s.uri), range, []);
+      thread.comments = s.comments.map((t) => new ReviewComment(t, thread));
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+      thread.state = s.resolved
+        ? vscode.CommentThreadState.Resolved
+        : vscode.CommentThreadState.Unresolved;
       this.threads.add(thread);
     }
   }
@@ -83,6 +94,7 @@ export class CommentStore implements vscode.Disposable {
         comments: t.comments.map((c) =>
           typeof c.body === 'string' ? c.body : c.body.value,
         ),
+        resolved: t.state === vscode.CommentThreadState.Resolved,
       });
     }
     void this.state.update(STORAGE_KEY, saved);
@@ -91,9 +103,81 @@ export class CommentStore implements vscode.Disposable {
   /** コメント widget の Submit から呼ばれる。スレッドへコメントを追加する。 */
   addComment(reply: vscode.CommentReply): void {
     const thread = reply.thread;
-    thread.comments = [...thread.comments, new ReviewComment(reply.text)];
+    thread.comments = [...thread.comments, new ReviewComment(reply.text, thread)];
     thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
     this.threads.add(thread);
+    this.persist();
+  }
+
+  /** コメントを編集モードにする。 */
+  editComment(comment: vscode.Comment): void {
+    const c = comment as ReviewComment;
+    const thread = c.parent;
+    if (!thread) {
+      return;
+    }
+    thread.comments = thread.comments.map((cm) => {
+      if ((cm as ReviewComment).id === c.id) {
+        cm.mode = vscode.CommentMode.Editing;
+      }
+      return cm;
+    });
+  }
+
+  /** 編集内容を確定する。 */
+  saveComment(comment: vscode.Comment): void {
+    const c = comment as ReviewComment;
+    const thread = c.parent;
+    if (!thread) {
+      return;
+    }
+    thread.comments = thread.comments.map((cm) => {
+      if ((cm as ReviewComment).id === c.id) {
+        (cm as ReviewComment).savedBody = cm.body;
+        cm.mode = vscode.CommentMode.Preview;
+      }
+      return cm;
+    });
+    this.persist();
+  }
+
+  /** 編集をキャンセルして元の本文に戻す。 */
+  cancelEdit(comment: vscode.Comment): void {
+    const c = comment as ReviewComment;
+    const thread = c.parent;
+    if (!thread) {
+      return;
+    }
+    thread.comments = thread.comments.map((cm) => {
+      if ((cm as ReviewComment).id === c.id) {
+        cm.body = (cm as ReviewComment).savedBody;
+        cm.mode = vscode.CommentMode.Preview;
+      }
+      return cm;
+    });
+  }
+
+  /** 1コメントを削除する（スレッドが空になれば破棄）。 */
+  deleteComment(comment: vscode.Comment): void {
+    const c = comment as ReviewComment;
+    const thread = c.parent;
+    if (!thread) {
+      return;
+    }
+    thread.comments = thread.comments.filter((cm) => (cm as ReviewComment).id !== c.id);
+    if (thread.comments.length === 0) {
+      thread.dispose();
+      this.threads.delete(thread);
+    }
+    this.persist();
+  }
+
+  /** スレッドの Resolve / Unresolve を切り替える。 */
+  toggleResolve(thread: vscode.CommentThread): void {
+    thread.state =
+      thread.state === vscode.CommentThreadState.Resolved
+        ? vscode.CommentThreadState.Unresolved
+        : vscode.CommentThreadState.Resolved;
     this.persist();
   }
 

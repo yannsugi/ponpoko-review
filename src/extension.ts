@@ -235,6 +235,25 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
 
+    // 個別コメントの編集 / 保存 / キャンセル / 削除 / Resolve。
+    vscode.commands.registerCommand('ponpokoReview.editComment', (c: vscode.Comment) =>
+      store.editComment(c),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.saveComment', (c: vscode.Comment) =>
+      store.saveComment(c),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.cancelComment', (c: vscode.Comment) =>
+      store.cancelEdit(c),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.deleteComment', (c: vscode.Comment) => {
+      store.deleteComment(c);
+      treeProvider.softRefresh(); // 💬 件数反映
+    }),
+    vscode.commands.registerCommand(
+      'ponpokoReview.toggleResolve',
+      (thread: vscode.CommentThread) => store.toggleResolve(thread),
+    ),
+
     vscode.commands.registerCommand('ponpokoReview.submit', async () => {
       const worktrees = await worktreeList(repoRoot);
       // 上部Submitは全worktreeを1ファイルにまとめて出力。
