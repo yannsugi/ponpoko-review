@@ -99,6 +99,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return this.baseStore.get(worktreePath) !== undefined;
   }
 
+  /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
+  filesUnder(worktree: Worktree, relDir: string): DiffEntry[] {
+    const entries = this.cache.get(worktree.path) ?? [];
+    const prefix = relDir + '/';
+    return entries.filter((e) => e.path.startsWith(prefix));
+  }
+
   getTreeItem(node: DiffNode): vscode.TreeItem {
     if (node.kind === 'worktree') {
       return this.worktreeItem(node);
@@ -113,6 +120,14 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       item.resourceUri = vscode.Uri.file(path.join(node.worktree.path, node.relDir));
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
+      // 配下ファイルが全て viewed ならフォルダも checked。
+      const files = this.filesUnder(node.worktree, node.relDir);
+      const allViewed =
+        files.length > 0 &&
+        files.every((e) => this.viewed.isViewed(node.worktree.path, e.path));
+      item.checkboxState = allViewed
+        ? vscode.TreeItemCheckboxState.Checked
+        : vscode.TreeItemCheckboxState.Unchecked;
       return item;
     }
     return this.fileItem(node);

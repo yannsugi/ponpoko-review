@@ -77,6 +77,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new DiffTreeProvider(repoRoot, viewed, baseStore);
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,
+    // フォルダ↔ファイルの伝播は viewed ストアを正として自前で管理する。
+    manageCheckboxStateManually: true,
   });
   context.subscriptions.push(treeView);
 
@@ -95,23 +97,38 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // チェックボックス操作 → viewed の保存/解除
+  // 1ファイルを viewed にする（現在の差分ハッシュを記録）。
+  const markViewed = async (worktree: { path: string }, filePath: string): Promise<void> => {
+    const base = treeProvider.getBase(worktree.path);
+    try {
+      const hash = await viewHash(base, filePath, worktree.path);
+      await viewed.setViewed(worktree.path, filePath, hash);
+    } catch {
+      // ハッシュ取得失敗時はマークしない。
+    }
+  };
+
+  // チェックボックス操作 → viewed の保存/解除。
+  // フォルダをチェックすると配下ファイルを一括 viewed/解除（逆も getTreeItem 側で集計）。
   context.subscriptions.push(
     treeView.onDidChangeCheckboxState(async (e) => {
-      const base = treeProvider.getBase();
       for (const [node, state] of e.items) {
-        if (node.kind !== 'file') {
-          continue;
-        }
-        if (state === vscode.TreeItemCheckboxState.Checked) {
-          try {
-            const hash = await viewHash(base, node.entry.path, node.worktree.path);
-            await viewed.setViewed(node.worktree.path, node.entry.path, hash);
-          } catch {
-            // ハッシュ取得失敗時はマークしない。
+        const checked = state === vscode.TreeItemCheckboxState.Checked;
+        if (node.kind === 'file') {
+          if (checked) {
+            await markViewed(node.worktree, node.entry.path);
+          } else {
+            await viewed.unsetViewed(node.worktree.path, node.entry.path);
           }
-        } else {
-          await viewed.unsetViewed(node.worktree.path, node.entry.path);
+        } else if (node.kind === 'dir') {
+          const files = treeProvider.filesUnder(node.worktree, node.relDir);
+          await Promise.all(
+            files.map((entry) =>
+              checked
+                ? markViewed(node.worktree, entry.path)
+                : viewed.unsetViewed(node.worktree.path, entry.path),
+            ),
+          );
         }
       }
       treeProvider.refresh();
