@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { listBranches, viewHash, worktreeList, Worktree } from './git';
+import { listBranches, viewHash, viewHashes, worktreeList, Worktree } from './git';
 import { DiffNode, DiffTreeProvider, WorktreeNode, worktreeName } from './diffTree';
 import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
 import { openDiff } from './openDiff';
@@ -127,22 +127,40 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         } else if (node.kind === 'dir') {
           const files = treeProvider.filesUnder(node.worktree, node.relDir);
-          await Promise.all(
-            files.map((entry) =>
-              checked
-                ? markViewed(node.worktree, entry.path)
-                : viewed.unsetViewed(node.worktree.path, entry.path),
-            ),
-          );
+          if (checked) {
+            // 配下ファイルのハッシュを一括算出してから viewed 登録（spawn を抑制）。
+            const base = treeProvider.getBase(node.worktree.path);
+            const hashes = await viewHashes(
+              base,
+              files.map((f) => f.path),
+              node.worktree.path,
+            );
+            await Promise.all(
+              files.map((f) =>
+                viewed.setViewed(node.worktree.path, f.path, hashes.get(f.path) ?? 'none:missing'),
+              ),
+            );
+          } else {
+            await Promise.all(
+              files.map((f) => viewed.unsetViewed(node.worktree.path, f.path)),
+            );
+          }
         }
       }
       treeProvider.softRefresh(); // viewed のみ変化 → git再取得せず再描画（ちらつき防止）
     }),
   );
 
-  // ファイル保存で差分が変わりうる → 再検証のためツリーを更新
+  // ファイル保存で差分が変わりうる → 再検証のためツリーを更新（連続保存はデバウンス）。
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(() => treeProvider.refresh()),
+    vscode.workspace.onDidSaveTextDocument(() => {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+      }
+      saveTimer = setTimeout(() => treeProvider.refresh(), 300);
+    }),
+    { dispose: () => saveTimer && clearTimeout(saveTimer) },
   );
 
   context.subscriptions.push(

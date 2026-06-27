@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
+import { DiffEntry, FileStatus, Worktree, diffNameStatus, viewHashes, worktreeList } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 
@@ -252,10 +252,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     try {
       const entries = await diffNameStatus(base, worktree.path);
       this.cache.set(key, entries);
-      // viewed のうち、チェック時点から中身が変わったものは自動で外す。
-      await Promise.all(
-        entries.map((entry) => this.revalidateViewed(base, worktree, entry)),
-      );
+      // viewed のうち、チェック時点から中身が変わったものは自動で外す（バッチ）。
+      await this.revalidateViewed(base, worktree, entries);
       return entries;
     } catch (err) {
       vscode.window.showErrorMessage(
@@ -265,16 +263,23 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
   }
 
-  /** viewed なファイルの現在ハッシュを取り直し、チェック時と違えば外す。 */
-  private async revalidateViewed(base: string, worktree: Worktree, entry: DiffEntry): Promise<void> {
-    if (!this.viewed.isViewed(worktree.path, entry.path)) {
+  /** viewed なファイルの現在ハッシュをバッチで取り直し、チェック時と違えば外す。 */
+  private async revalidateViewed(base: string, worktree: Worktree, entries: DiffEntry[]): Promise<void> {
+    const viewedPaths = entries
+      .filter((e) => this.viewed.isViewed(worktree.path, e.path))
+      .map((e) => e.path);
+    if (viewedPaths.length === 0) {
       return;
     }
     try {
-      const current = await viewHash(base, entry.path, worktree.path);
-      if (current !== this.viewed.getHash(worktree.path, entry.path)) {
-        await this.viewed.unsetViewed(worktree.path, entry.path);
-      }
+      const hashes = await viewHashes(base, viewedPaths, worktree.path);
+      await Promise.all(
+        viewedPaths.map(async (p) => {
+          if (hashes.get(p) !== this.viewed.getHash(worktree.path, p)) {
+            await this.viewed.unsetViewed(worktree.path, p);
+          }
+        }),
+      );
     } catch {
       // ハッシュ取得失敗時は viewed を維持（誤って外さない）。
     }
