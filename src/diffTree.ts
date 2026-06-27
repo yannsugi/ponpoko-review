@@ -3,6 +3,7 @@ import * as path from 'path';
 import { DiffEntry, Worktree, diffNameStatus, viewHash, worktreeList } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
+import { ICON_SCHEME, StatusDecorationProvider } from './statusDecoration';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
@@ -16,7 +17,7 @@ export function worktreeName(wt: Worktree): string {
  * 拡張子はそのままに別スキームへ差し替える（アイコンはパスの拡張子で解決される）。
  */
 function iconUri(fsPath: string): vscode.Uri {
-  return vscode.Uri.file(fsPath).with({ scheme: 'ponpoko-file' });
+  return vscode.Uri.file(fsPath).with({ scheme: ICON_SCHEME });
 }
 
 export type ViewMode = 'list' | 'tree';
@@ -57,6 +58,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly baseStore: WorktreeBaseStore,
     /** ファイル(fsPath)に付いているコメント数を返す。 */
     private readonly commentCountOf: (fsPath: string) => number,
+    /** 右端の A/M/D/R バッジ用デコレーション。 */
+    private readonly decoration: StatusDecorationProvider,
   ) {}
 
   refresh(): void {
@@ -99,6 +102,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   /** その worktree が個別 base を上書きしているか。 */
   hasBaseOverride(worktreePath: string): boolean {
     return this.baseStore.get(worktreePath) !== undefined;
+  }
+
+  /** キャッシュ全体から fsPath→status マップを作り、右端バッジ用デコレーションへ反映。 */
+  private pushStatuses(): void {
+    const map = new Map<string, string>();
+    for (const [wtPath, entries] of this.cache) {
+      for (const e of entries) {
+        map.set(path.join(wtPath, e.path), e.status);
+      }
+    }
+    this.decoration.setStatuses(map);
   }
 
   /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
@@ -167,12 +181,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
     const fsPath = path.join(node.worktree.path, entry.path);
-    // ファイルタイプ別アイコンは出しつつ、git 標準装飾(U/M バッジ)は抑制する。
+    // ファイルタイプ別アイコン＋右端の A/M/D/R バッジ（FileDecoration）を出す。
     item.resourceUri = iconUri(fsPath);
-    // コメントが付いていれば 💬＋件数を先頭に。続けて git状態 A/M/D/R。
+    // status は右端バッジへ。description はコメント💬とリネーム元のみ。
     const comments = this.commentCountOf(fsPath);
-    const commentMark = comments > 0 ? `💬${comments}  ` : '';
-    item.description = `${commentMark}${entry.status}${entry.oldPath ? ` ← ${entry.oldPath}` : ''}`;
+    const parts: string[] = [];
+    if (comments > 0) {
+      parts.push(`💬${comments}`);
+    }
+    if (entry.oldPath) {
+      parts.push(`← ${entry.oldPath}`);
+    }
+    item.description = parts.join('  ');
     item.tooltip = new vscode.MarkdownString(
       `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
         `status: \`${entry.status}\`` +
@@ -236,6 +256,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     try {
       const entries = await diffNameStatus(base, worktree.path);
       this.cache.set(key, entries);
+      this.pushStatuses();
       // viewed のうち、チェック時点から中身が変わったものは自動で外す。
       await Promise.all(
         entries.map((entry) => this.revalidateViewed(base, worktree, entry)),
