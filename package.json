@@ -13,6 +13,12 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "git CLI を実行するため、信頼済みワークスペースでのみ動作します。"
+    }
+  },
   "activationEvents": [],
   "contributes": {
     "configuration": {
