@@ -69,8 +69,16 @@
       },
       {
         "command": "ponpokoReview.setBase",
-        "title": "ponpoko-review: 比較基準ブランチを選択",
-        "icon": "$(git-branch)"
+        "title": "ponpoko-review: 既定の比較先(base)を選択"
+      },
+      {
+        "command": "ponpokoReview.setOutputDir",
+        "title": "ponpoko-review: 出力先ディレクトリを設定"
+      },
+      {
+        "command": "ponpokoReview.settings",
+        "title": "ponpoko-review: 設定",
+        "icon": "$(gear)"
       },
       {
         "command": "ponpokoReview.viewAsTree",
@@ -111,7 +119,7 @@
           "group": "navigation@0"
         },
         {
-          "command": "ponpokoReview.setBase",
+          "command": "ponpokoReview.settings",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@1"
         },

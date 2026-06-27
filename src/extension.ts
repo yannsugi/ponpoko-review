@@ -254,6 +254,36 @@ export function activate(context: vscode.ExtensionContext): void {
         .update('baseBranch', picked, vscode.ConfigurationTarget.Workspace);
       treeProvider.refresh();
     }),
+
+    // 出力先ディレクトリを設定（グローバル設定 ponpokoReview.outputDir）。
+    vscode.commands.registerCommand('ponpokoReview.setOutputDir', async () => {
+      const cfg = vscode.workspace.getConfiguration('ponpokoReview');
+      const current = cfg.get<string>('outputDir', '.ponpoko-review');
+      const value = await vscode.window.showInputBox({
+        prompt: 'レビューmdの出力先ディレクトリ（相対=ワークスペースルート基準 / 絶対パス可）',
+        value: current,
+        valueSelection: [0, current.length],
+      });
+      if (value === undefined) {
+        return;
+      }
+      await cfg.update('outputDir', value.trim(), vscode.ConfigurationTarget.Workspace);
+      vscode.window.showInformationMessage(`ponpoko-review: 出力先を ${value.trim()} に設定しました。`);
+    }),
+
+    // 上部の設定メニュー（diffには出さないグローバル設定の入口）。
+    vscode.commands.registerCommand('ponpokoReview.settings', async () => {
+      const items: (vscode.QuickPickItem & { cmd: string })[] = [
+        { label: '$(folder) 出力先ディレクトリを設定', cmd: 'ponpokoReview.setOutputDir' },
+        { label: '$(git-branch) 既定の比較先(base)を選択', cmd: 'ponpokoReview.setBase' },
+      ];
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'ponpoko-review 設定',
+      });
+      if (picked) {
+        await vscode.commands.executeCommand(picked.cmd);
+      }
+    }),
   );
 }
 
