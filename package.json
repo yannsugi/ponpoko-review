@@ -60,6 +60,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "ponpokoReview.gotoComment",
+        "title": "ponpoko-review: コメントへ移動",
+        "icon": "$(comment)"
+      },
+      {
         "command": "ponpokoReview.submit",
         "title": "ponpoko-review: レビューを書き出す (Submit)",
         "icon": "$(check)"
@@ -130,19 +135,24 @@
           "group": "navigation@1"
         },
         {
-          "command": "ponpokoReview.refresh",
+          "command": "ponpokoReview.gotoComment",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@2"
         },
         {
-          "command": "ponpokoReview.submit",
+          "command": "ponpokoReview.refresh",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@3"
         },
         {
-          "command": "ponpokoReview.clear",
+          "command": "ponpokoReview.submit",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@4"
+        },
+        {
+          "command": "ponpokoReview.clear",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [

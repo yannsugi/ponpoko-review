@@ -4,7 +4,7 @@ import { listBranches, viewHash, viewHashes, worktreeList, Worktree } from './gi
 import { DiffNode, DiffTreeProvider, WorktreeNode, worktreeName } from './diffTree';
 import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
 import { openDiff } from './openDiff';
-import { CommentStore } from './comments';
+import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
@@ -176,6 +176,50 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       return openDiff(treeProvider.getBase(node.worktree.path), node);
+    }),
+
+    // コメントへクイックアクセス（QuickPick → diff を開いて該当行へ）。
+    vscode.commands.registerCommand('ponpokoReview.gotoComment', async () => {
+      const threads = store.getThreads();
+      if (threads.length === 0) {
+        vscode.window.showInformationMessage('ponpoko-review: コメントがありません。');
+        return;
+      }
+      type Item = vscode.QuickPickItem & { uri: vscode.Uri; line: number };
+      const items: Item[] = threads
+        .map((t) => {
+          const range = threadLineRange(t);
+          const ref =
+            range.end > range.start
+              ? `${range.start + 1}-${range.end + 1}`
+              : `${range.start + 1}`;
+          return {
+            label: `$(comment) ${vscode.workspace.asRelativePath(t.uri)}:${ref}`,
+            description: threadText(t).split('\n')[0],
+            uri: t.uri,
+            line: range.start,
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'コメントへ移動',
+        matchOnDescription: true,
+      });
+      if (!picked) {
+        return;
+      }
+      const node = await treeProvider.resolveFileNode(picked.uri);
+      if (node) {
+        await openDiff(treeProvider.getBase(node.worktree.path), node);
+      } else {
+        await vscode.window.showTextDocument(picked.uri);
+      }
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        const pos = new vscode.Position(picked.line, 0);
+        editor.selection = new vscode.Selection(pos, pos);
+        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+      }
     }),
 
     vscode.commands.registerCommand(

@@ -117,6 +117,33 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return this.baseStore.get(worktreePath) !== undefined;
   }
 
+  /** 作業ファイル uri から FileNode を解決する（コメントジャンプ用）。差分に無ければ null。 */
+  async resolveFileNode(uri: vscode.Uri): Promise<FileNode | null> {
+    let worktrees: Worktree[];
+    try {
+      worktrees = await worktreeList(this.repoRoot);
+    } catch {
+      return null;
+    }
+    let owner: Worktree | undefined;
+    for (const wt of worktrees) {
+      const rel = path.relative(wt.path, uri.fsPath);
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+        if (!owner || wt.path.length > owner.path.length) {
+          owner = wt;
+        }
+      }
+    }
+    if (!owner) {
+      return null;
+    }
+    const entries =
+      this.cache.get(owner.path) ?? (await this.entriesFor(owner)) ?? [];
+    const rel = path.relative(owner.path, uri.fsPath).split(path.sep).join('/');
+    const entry = entries.find((e) => e.path === rel);
+    return entry ? { kind: 'file', worktree: owner, entry } : null;
+  }
+
   /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
   filesUnder(worktree: Worktree, relDir: string): DiffEntry[] {
     const entries = this.cache.get(worktree.path) ?? [];
