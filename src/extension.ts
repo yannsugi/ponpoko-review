@@ -74,7 +74,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const baseStore = new WorktreeBaseStore(context.workspaceState);
 
   // 差分ツリー
-  const treeProvider = new DiffTreeProvider(repoRoot, viewed, baseStore);
+  const treeProvider = new DiffTreeProvider(repoRoot, viewed, baseStore, (fsPath) =>
+    store.countFor(fsPath),
+  );
   const treeView = vscode.window.createTreeView('ponpokoReview.diffTree', {
     treeDataProvider: treeProvider,
     // フォルダ↔ファイルの伝播は viewed ストアを正として自前で管理する。
@@ -156,6 +158,7 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.addComment',
       (reply: vscode.CommentReply) => {
         store.addComment(reply);
+        treeProvider.refresh(); // 💬 マーカー反映
       },
     ),
 
@@ -166,6 +169,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('ponpokoReview.clear', () => {
       store.clear();
+      treeProvider.refresh(); // 💬 マーカー反映
       vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
 
@@ -193,6 +197,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         const n = store.clearUnder(node.worktree.path);
+        treeProvider.refresh(); // 💬 マーカー反映
         vscode.window.showInformationMessage(
           `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
         );
