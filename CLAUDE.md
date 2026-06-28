@@ -27,11 +27,11 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - worktree ごとの差分を `cache`（refresh 単位）。`refresh()`=cache破棄+git再取得、`softRefresh()`=再描画のみ（viewed/コメント変化用、ちらつき防止）。
   - ファイルアイコンは status 文字アイコン（`media/status/<a|m|d|r|c|t|u>.svg` を `iconPath` に。viewed は `-dim` グレー版）。
 - `src/baseContentProvider.ts` — スキーム `ponpoko-review-base:` で `git show base:path` を供給。追加/欠落は空ドキュメント。
-- `src/openDiff.ts` — `vscode.diff`。left=base仮想doc / **right=作業ツリーの実ファイル**。A は left 空、D は right 空、R は旧パス参照。
+- `src/openDiff.ts` — `vscode.diff`。left=**merge-base**仮想doc / **right=作業ツリーの実ファイル**。A は left 空、D は right 空、R は旧パス参照。base先端だと main 進行時に嘘の差分になるため merge-base を供給。
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
-- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。
+- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
 ## 守るべき不変条件（罠）

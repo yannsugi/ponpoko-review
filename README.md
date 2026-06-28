@@ -143,17 +143,28 @@ worktree 行にホバーすると、その worktree 単位の **比較先設定 
 
 ## 出力される review.md の例
 
-```markdown
+~~~markdown
 # Review Instructions (feature-diff-tree)
 
 ## src/handlers/user_handler.rs:42 (main...HEAD)
+```rs
+    let user = repo.find(id);
+```
 Service層を経由するように。Handlerから直接Repositoryを叩かないこと。
 
 ## web/components/StockList.tsx:15-23 (main...HEAD)
-このブロックのローディング状態のハンドリングを追加。
+```tsx
+  return items.map((it) => (
+    <Row key={it.id} item={it} />
+  ));
 ```
+このブロックのローディング状態のハンドリングを追加。
+~~~
 
-（`:15-23` のように複数行選択のコメントは範囲で出る）
+- コメント対象行のコードが **```フェンス**で付くので、行番号がズレても・Claude 側でも文脈が分かる。
+- `:15-23` のように複数行選択のコメントは範囲で出る。
+- diff は `base...HEAD`（**merge-base 基準**）。base が分岐後に進んでも自分の変更だけが出る。
+- Submit 後の通知の **「出力分を Resolve」** で、送ったコメントを一括 Resolve（＝未送信のものだけ残る）。
 
 ---
 
