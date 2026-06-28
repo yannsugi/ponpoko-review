@@ -258,12 +258,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
-    // 矢印はマージの向き（current を target に取り込む）。上書き時は ★、コメントは 💬N。
+    // ラベルは簡潔に「current → target」。詳細(意味)は tooltip。上書きは ★、コメントは 💬N。
     const cc = this.commentCountUnder(node.worktree.path);
     item.description =
-      `current: ${current} → target: ${target}` +
+      `${current} → ${target}` +
       (overridden ? ' ★' : '') +
-      (cc > 0 ? `   💬${cc}` : '');
+      (cc > 0 ? `  💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +

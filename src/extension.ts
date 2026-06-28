@@ -323,10 +323,21 @@ export function activate(context: vscode.ExtensionContext): void {
       await runSubmit(store.getThreads(), worktrees, '', true);
     }),
 
-    vscode.commands.registerCommand('ponpokoReview.clear', () => {
+    vscode.commands.registerCommand('ponpokoReview.clear', async () => {
+      const n = store.total();
+      if (n === 0) {
+        return;
+      }
+      const ok = await vscode.window.showWarningMessage(
+        `コメント ${n} 件をすべて消去します。元に戻せません。`,
+        { modal: true },
+        '全消去',
+      );
+      if (ok !== '全消去') {
+        return;
+      }
       store.clear();
       onCommentsChanged();
-      vscode.window.showInformationMessage('ponpoko-review: コメントを消去しました。');
     }),
 
     // worktree 単位: そのworktreeのコメントだけ書き出す。
@@ -350,15 +361,25 @@ export function activate(context: vscode.ExtensionContext): void {
     // worktree 単位: そのworktreeのコメントだけクリア。
     vscode.commands.registerCommand(
       'ponpokoReview.clearWorktree',
-      (node: WorktreeNode) => {
+      async (node: WorktreeNode) => {
         if (!node || node.kind !== 'worktree') {
           return;
         }
-        const n = store.clearUnder(node.worktree.path);
-        onCommentsChanged();
-        vscode.window.showInformationMessage(
-          `ponpoko-review: ${worktreeName(node.worktree)} のコメントを ${n} 件クリアしました。`,
+        const name = worktreeName(node.worktree);
+        const count = store.getThreadsUnder(node.worktree.path).length;
+        if (count === 0) {
+          return;
+        }
+        const ok = await vscode.window.showWarningMessage(
+          `${name} のコメント ${count} 件を消去します。元に戻せません。`,
+          { modal: true },
+          '消去',
         );
+        if (ok !== '消去') {
+          return;
+        }
+        store.clearUnder(node.worktree.path);
+        onCommentsChanged();
       },
     ),
 
