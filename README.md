@@ -31,23 +31,66 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 3. diff の行（複数行選択も可）にインラインコメント（修正指示）を付ける。
    - コメントは必ず右（HEAD 側＝作業ファイル）に付く。行番号がズレない。
    - 後から ✎編集 / 🗑削除 / Resolve できる。
-4. Submit（✓）で `review.md` に書き出し、**自動でそのファイルが開く**。
+4. Submit（出力ボタン）で `review.md` に書き出し、**自動でそのファイルが開く**。
 5. その md を `claude -p` に渡し、修正は Claude Code に任せる。
 
-## インストール
+## 個人環境への導入
+
+マーケットプレイス未公開の個人用拡張なので、**ビルドして vsix を自分の VS Code に入れる**。
+
+### 前提
+- Node.js（18+ 目安）/ npm
+- VS Code
+- `git`（CLI が PATH にあること）
+
+### 手順
 
 ```sh
+git clone https://github.com/yannsugi/ponpoko-review.git
+cd ponpoko-review
 npm install
 npm run compile
-npx vsce package                              # → ponpoko-review-x.y.z.vsix
+
+# vsix を生成して自分の VS Code に常駐インストール
+npx vsce package                                  # → ponpoko-review-<version>.vsix
 code --install-extension ponpoko-review-*.vsix
 ```
 
-開発中は `F5`（Extension Development Host）で起動。
+> `code` コマンドが無い場合は、VS Code の Command Palette → **Shell Command: Install 'code' command in PATH**。
+> または拡張ビューの `…` → **Install from VSIX...** で `.vsix` を選ぶ。
+
+インストール後 VS Code を再読込（Developer: Reload Window）すると、アクティビティバーに 🦝 が出る。
+
+### 更新 / アンインストール
+
+```sh
+git pull && npm install && npm run compile
+npx vsce package
+code --install-extension ponpoko-review-*.vsix    # 上書き更新
+
+code --uninstall-extension yannsugi.ponpoko-review # 削除
+```
+
+### 開発（ソースを直に試す）
+`F5`（Extension Development Host）で、ビルド済みソースをそのまま起動できる（vsix 化不要）。
 
 ---
 
 ## 機能
+
+### ツールバー（ビュー上部）
+
+| アイコン | 機能 |
+|---|---|
+| ⮂ list/tree | 表示モードを順次切り替え |
+| フィルタ | コメントのあるファイルだけに絞る |
+| コメントマーク | ファイル配下のコメント子ノードの展開 ON/OFF |
+| ↻ | ツリーを更新 |
+| ⬆ 出力 | レビューを `review.md` に書き出し（全 worktree 統合） |
+| 🗑 | コメントを全消去 |
+| ⚙ 設定（右端） | 出力先 / 既定の比較先を設定 |
+
+worktree 行にホバーすると、その worktree 単位の **比較先設定 / 出力 / クリア** が出る。
 
 ### worktree 単位の差分ツリー
 - トップ階層が worktree。配下にそのworktreeの差分ファイルがぶら下がる。
@@ -67,12 +110,13 @@ code --install-extension ponpoko-review-*.vsix
 - フォルダは配下が全てチェックされると自動でチェック。フォルダをチェックすれば配下を一括チェック。
 
 ### コメント
-- コメントを付けたファイルに `💬件数`、フォルダ/worktree には配下合計の `💬N` を表示。
+- コメントを付けたファイルに `💬件数`、worktree には配下合計の `💬N` を表示（ディレクトリには出さない）。
 - ファイルを展開すると**コメント本文が子ノード**で並び、クリックで該当行へジャンプ。
+- 複数行を選択してコメントすると範囲（`path:開始-終了`）で記録される。
 - 個別に **✎編集 / 🗑削除 / Resolve** が可能。
 - ツールバーで切り替え:
   - **コメントマーク**: ファイル配下のコメント子ノードの展開 ON/OFF（💬 自体は常時表示）。
-  - **絞り込み($(filter))**: コメントのあるファイルだけに絞る。
+  - **絞り込み（フィルタ）**: コメントのあるファイルだけに絞る。
 - **クイックアクセス**: ステータスバーの未提出コメント数をクリック、またはコマンド「コメントへ移動」で、全コメントを一覧 → 選んでジャンプ。
 
 ### 出力
