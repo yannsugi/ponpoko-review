@@ -135,6 +135,7 @@ worktree 行にホバーすると、その worktree 単位の **比較先設定 
 |---|---|---|
 | `ponpokoReview.baseBranch` | `main` | 既定の比較先（target）ブランチ |
 | `ponpokoReview.outputDir` | `.ponpoko-review` | レビュー md の出力先（相対はルート基準・絶対パス可） |
+| `ponpokoReview.afterSubmit` | `resolve` | Submit 後の出力コメントの扱い（`resolve`/`clear`/`none`） |
 
 歯車から「出力先ディレクトリ」「既定の比較先」をその場で設定できる。
 比較先まわりは上部に出さず、worktree ごとの設定に寄せている。
@@ -164,7 +165,7 @@ Service層を経由するように。Handlerから直接Repositoryを叩かな�
 - コメント対象行のコードが **```フェンス**で付くので、行番号がズレても・Claude 側でも文脈が分かる。
 - `:15-23` のように複数行選択のコメントは範囲で出る。
 - diff は `base...HEAD`（**merge-base 基準**）。base が分岐後に進んでも自分の変更だけが出る。
-- Submit 後の通知の **「出力分を Resolve」** で、送ったコメントを一括 Resolve（＝未送信のものだけ残る）。
+- Submit すると、**出力したコメントは既定で自動 Resolve**（＝未送信のものだけ残る）。設定 `afterSubmit` で `resolve`（既定）/ `clear`（削除）/ `none`（手動）を選べる。
 
 ---
 

@@ -40,14 +40,14 @@
         },
         "ponpokoReview.afterSubmit": {
           "type": "string",
-          "enum": ["none", "resolve", "clear"],
+          "enum": ["resolve", "clear", "none"],
           "enumDescriptions": [
-            "何もしない（通知のボタンから手動で Resolve 可）",
-            "出力したコメントを自動で Resolve（後から解除可能）",
-            "出力したコメントを自動で削除（復元不可）"
+            "出力したコメントを自動で Resolve（既定・後から解除可能）",
+            "出力したコメントを自動で削除（復元不可）",
+            "何もしない（エディタ上の各コメントから手動で Resolve）"
           ],
-          "default": "none",
-          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。"
+          "default": "resolve",
+          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。既定は自動 Resolve（＝未送信のコメントだけ残る）。"
         }
       }
     },

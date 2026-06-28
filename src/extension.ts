@@ -65,29 +65,21 @@ export function activate(context: vscode.ExtensionContext): void {
       const head =
         `ponpoko-review: ${result.itemCount} 件を ${where} に書き出しました` +
         (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '');
-      // 出力後の扱いは設定 afterSubmit に従う（none/resolve/clear）。
+      // 出力後の扱いは設定 afterSubmit に従う（既定 resolve）。
       const after = vscode.workspace
         .getConfiguration('ponpokoReview')
-        .get<string>('afterSubmit', 'none');
-      if (after === 'resolve') {
-        store.resolveThreads(active);
-        onCommentsChanged();
-        vscode.window.showInformationMessage(`${head}（出力分を Resolve）。`);
-      } else if (after === 'clear') {
+        .get<string>('afterSubmit', 'resolve');
+      let suffix = '';
+      if (after === 'clear') {
         store.removeThreads(active);
         onCommentsChanged();
-        vscode.window.showInformationMessage(`${head}（出力分を削除）。`);
-      } else {
-        // none: 通知のボタンから手動で Resolve できる。
-        const choice = await vscode.window.showInformationMessage(
-          `${head}。`,
-          '出力分を Resolve',
-        );
-        if (choice === '出力分を Resolve') {
-          store.resolveThreads(active);
-          onCommentsChanged();
-        }
+        suffix = '（出力分を削除）';
+      } else if (after !== 'none') {
+        store.resolveThreads(active);
+        onCommentsChanged();
+        suffix = '（出力分を Resolve）';
       }
+      vscode.window.showInformationMessage(`${head}${suffix}。`);
     } catch (err) {
       vscode.window.showErrorMessage(
         `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,
