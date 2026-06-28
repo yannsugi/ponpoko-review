@@ -14,3 +14,19 @@ test('renderMarkdown: 単一行と範囲の見出し', () => {
   assert.ok(md.includes('fix it'));
   assert.ok(md.includes('range it'));
 });
+
+test('renderMarkdown: コードは ``` フェンス(言語付き)で出る', () => {
+  const md = renderMarkdown('wt', 'main', [
+    { relpath: 'src/a.ts', line: 42, endLine: 42, code: 'const x = 1;', body: 'fix' },
+  ]);
+  assert.ok(md.includes('```ts'));
+  assert.ok(md.includes('const x = 1;'));
+  assert.match(md, /```ts\nconst x = 1;\n```/);
+});
+
+test('renderMarkdown: code 無しならフェンスを出さない', () => {
+  const md = renderMarkdown('wt', 'main', [
+    { relpath: 'a.txt', line: 1, endLine: 1, body: 'b' },
+  ]);
+  assert.ok(!md.includes('```'));
+});

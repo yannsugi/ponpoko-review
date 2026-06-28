@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { FileNode } from './diffTree';
+import { mergeBase } from './git';
 import { BASE_SCHEME, makeBaseUri } from './baseContentProvider';
 
 /** 空の base スキーム URI（cwd 空 → プロバイダが '' を返す）。追加/削除の片側用。 */
@@ -27,6 +28,15 @@ export async function openDiff(base: string, node: FileNode): Promise<void> {
   const workingUri = vscode.Uri.file(path.join(cwd, entry.path));
   const title = `${entry.path} (${base}...HEAD)`;
 
+  // 左側は base の先端ではなく merge-base から供給する（base...HEAD の三点ドット相当）。
+  // こうしないと base(main)がブランチ後に進んだとき、main側の変更が"あなたの削除"として出る。
+  let leftRef = base;
+  try {
+    leftRef = await mergeBase(base, cwd);
+  } catch {
+    // merge-base が取れない場合は base 先端にフォールバック。
+  }
+
   let leftUri: vscode.Uri;
   let rightUri: vscode.Uri;
 
@@ -36,10 +46,10 @@ export async function openDiff(base: string, node: FileNode): Promise<void> {
     rightUri = workingUri;
   } else if (entry.status === 'D') {
     // 削除: 右を空に。
-    leftUri = makeBaseUri(base, cwd, basePath);
+    leftUri = makeBaseUri(leftRef, cwd, basePath);
     rightUri = makeEmptyUri(entry.path);
   } else {
-    leftUri = makeBaseUri(base, cwd, basePath);
+    leftUri = makeBaseUri(leftRef, cwd, basePath);
     rightUri = workingUri;
   }
 

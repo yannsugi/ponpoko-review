@@ -62,11 +62,17 @@ export function activate(context: vscode.ExtensionContext): void {
       const where = result.files
         .map((f) => path.relative(repoRoot, f) || f)
         .join(', ');
-      vscode.window.showInformationMessage(
+      // 出力した分を Resolve してループを閉じられるよう、ボタンを添える。
+      const choice = await vscode.window.showInformationMessage(
         `ponpoko-review: ${result.itemCount} 件を ${where} に書き出しました` +
           (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '') +
           '。',
+        '出力分を Resolve',
       );
+      if (choice === '出力分を Resolve') {
+        store.resolveThreads(active);
+        onCommentsChanged();
+      }
     } catch (err) {
       vscode.window.showErrorMessage(
         `ponpoko-review: 書き出しに失敗: ${err instanceof Error ? err.message : String(err)}`,

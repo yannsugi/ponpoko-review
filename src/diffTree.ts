@@ -38,6 +38,7 @@ export interface CommentInfo {
   line: number; // 0-based 開始行
   endLine: number; // 0-based 終了行
   text: string;
+  drifted?: boolean; // 保存位置から行がズレている可能性
 }
 
 export interface CommentNode {
@@ -221,10 +222,15 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const ref =
       info.endLine > info.line ? `${info.line + 1}-${info.endLine + 1}` : `${info.line + 1}`;
     const first = info.text.split('\n')[0] || '(空コメント)';
-    const item = new vscode.TreeItem(first, vscode.TreeItemCollapsibleState.None);
+    const item = new vscode.TreeItem(
+      (info.drifted ? '⚠ ' : '') + first,
+      vscode.TreeItemCollapsibleState.None,
+    );
     item.description = `:${ref}`;
-    item.iconPath = new vscode.ThemeIcon('comment');
-    item.tooltip = new vscode.MarkdownString(info.text);
+    item.iconPath = new vscode.ThemeIcon(info.drifted ? 'warning' : 'comment');
+    item.tooltip = new vscode.MarkdownString(
+      (info.drifted ? '⚠ 行がずれている可能性があります\n\n' : '') + info.text,
+    );
     item.contextValue = 'ponpoko.comment';
     item.command = {
       command: 'ponpokoReview.openComment',

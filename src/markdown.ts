@@ -8,6 +8,7 @@ interface ReviewItem {
   relpath: string;
   line: number; // 1-based 開始行（HEAD 基準）
   endLine: number; // 1-based 終了行（単一行なら line と同じ）
+  code?: string; // コメント対象行のコード（文脈）
   body: string;
 }
 
@@ -61,6 +62,24 @@ export async function writeReview(opts: {
   const grouped = new Map<string, { wt?: Worktree; items: ReviewItem[] }>();
   let itemCount = 0;
 
+  // ファイル内容を一度だけ読む（コード文脈の抽出用）。
+  const lineCache = new Map<string, string[]>();
+  const getLines = async (uri: vscode.Uri): Promise<string[]> => {
+    const key = uri.toString();
+    let lines = lineCache.get(key);
+    if (!lines) {
+      try {
+        lines = Buffer.from(await vscode.workspace.fs.readFile(uri))
+          .toString('utf8')
+          .split(/\r?\n/);
+      } catch {
+        lines = [];
+      }
+      lineCache.set(key, lines);
+    }
+    return lines;
+  };
+
   for (const thread of threads) {
     const body = threadText(thread);
     if (!body) {
@@ -75,9 +94,12 @@ export async function writeReview(opts: {
     const range = threadLineRange(thread); // 0-based, end含む
     const line = range.start + 1; // 0-based → 1-based
     const endLine = range.end + 1;
+    // コメント対象行のコードを文脈として抽出。
+    const lines = await getLines(thread.uri);
+    const code = lines.slice(range.start, range.end + 1).join('\n') || undefined;
 
     const group = grouped.get(name) ?? { wt, items: [] };
-    group.items.push({ relpath, line, endLine, body });
+    group.items.push({ relpath, line, endLine, code, body });
     grouped.set(name, group);
     itemCount++;
   }
@@ -125,6 +147,13 @@ export function renderMarkdown(name: string, base: string, items: ReviewItem[]):
     // 複数行選択は path:開始-終了、単一行は path:行。
     const ref = item.endLine > item.line ? `${item.line}-${item.endLine}` : `${item.line}`;
     lines.push(`## ${item.relpath}:${ref} (${base}...HEAD)`);
+    // 対象コードを ``` フェンスで文脈として添える（行ズレに強く、Claudeが文脈を掴める）。
+    if (item.code) {
+      const lang = path.extname(item.relpath).slice(1);
+      lines.push('```' + lang);
+      lines.push(item.code);
+      lines.push('```');
+    }
     lines.push(item.body);
     lines.push('');
   }

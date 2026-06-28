@@ -251,6 +251,14 @@ export class CommentStore implements vscode.Disposable {
     this.persist();
   }
 
+  /** 複数スレッドをまとめて Resolve 済みにする（Submit 後のループ閉鎖用）。 */
+  resolveThreads(threads: vscode.CommentThread[]): void {
+    for (const t of threads) {
+      t.state = vscode.CommentThreadState.Resolved;
+    }
+    this.persist();
+  }
+
   /** 保持中の全スレッドを返す（md 書き出し用）。 */
   getThreads(): vscode.CommentThread[] {
     return [...this.threads];
@@ -276,13 +284,18 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads].filter(isActive).length;
   }
 
-  /** 指定ファイル(uri.fsPath)の未解決コメント一覧（行範囲＋本文）。行順。 */
-  listFor(fsPath: string): { line: number; endLine: number; text: string }[] {
-    const res: { line: number; endLine: number; text: string }[] = [];
+  /** 指定ファイル(uri.fsPath)の未解決コメント一覧（行範囲＋本文＋行ズレ）。行順。 */
+  listFor(fsPath: string): { line: number; endLine: number; text: string; drifted: boolean }[] {
+    const res: { line: number; endLine: number; text: string; drifted: boolean }[] = [];
     for (const t of this.threads) {
       if (t.uri.fsPath === fsPath && t.comments.length > 0 && isActive(t)) {
         const r = threadLineRange(t);
-        res.push({ line: r.start, endLine: r.end, text: threadText(t) });
+        res.push({
+          line: r.start,
+          endLine: r.end,
+          text: threadText(t),
+          drifted: t.label === DRIFT_LABEL,
+        });
       }
     }
     res.sort((a, b) => a.line - b.line);
