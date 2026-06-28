@@ -82,7 +82,7 @@
       {
         "command": "ponpokoReview.clear",
         "title": "ponpoko-review: コメントを全消去 (Clear)",
-        "icon": "$(clear-all)"
+        "icon": "$(trash)"
       },
       {
         "command": "ponpokoReview.addComment",
@@ -167,7 +167,7 @@
       {
         "command": "ponpokoReview.clearWorktree",
         "title": "ponpoko-review: このworktreeのコメントをクリア",
-        "icon": "$(clear-all)"
+        "icon": "$(trash)"
       },
       {
         "command": "ponpokoReview.setWorktreeBase",
