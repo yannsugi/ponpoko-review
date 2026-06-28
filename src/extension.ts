@@ -122,6 +122,9 @@ export function activate(context: vscode.ExtensionContext): void {
     updateStatusBar();
   };
 
+  // 復元したコメントの行ズレを、保存したアンカー行で追従させる（起動後に一度）。
+  void store.reanchor().then(onCommentsChanged);
+
   // コメント位置へ移動（diff を開いて該当行を表示）。
   const revealComment = async (uri: vscode.Uri, line: number): Promise<void> => {
     const node = await treeProvider.resolveFileNode(uri);

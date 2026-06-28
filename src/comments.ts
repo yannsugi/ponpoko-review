@@ -34,15 +34,20 @@ interface SavedThread {
   line: number;
   /** 範囲コメントの終端行(0-based, 生の range.end.line)。単一行は省略可。 */
   endLine?: number;
+  /** アンカー行（開始行）のテキスト(trim済)。再アンカー(行ズレ追従)用。 */
+  anchor?: string;
   comments: string[];
   resolved?: boolean;
 }
 
 const STORAGE_KEY = 'ponpoko.comments';
+const DRIFT_LABEL = '⚠ 行がずれている可能性があります';
 
 export class CommentStore implements vscode.Disposable {
   private readonly controller: vscode.CommentController;
   private readonly threads = new Set<vscode.CommentThread>();
+  /** thread → アンカー行テキスト。 */
+  private readonly anchors = new WeakMap<vscode.CommentThread, string>();
 
   constructor(private readonly state: vscode.Memento) {
     this.controller = vscode.comments.createCommentController(
@@ -76,8 +81,65 @@ export class CommentStore implements vscode.Disposable {
       thread.state = s.resolved
         ? vscode.CommentThreadState.Resolved
         : vscode.CommentThreadState.Unresolved;
+      if (s.anchor) {
+        this.anchors.set(thread, s.anchor);
+      }
       this.threads.add(thread);
     }
+  }
+
+  /**
+   * 復元したコメントを、保存したアンカー行テキストと現在のファイル内容で照合し、
+   * 行がズレていたら近傍を探して追従させる。見つからなければ警告ラベルを付ける。
+   * （ファイル読み込みが必要なので非同期。activate から呼ぶ）
+   */
+  async reanchor(): Promise<void> {
+    for (const thread of [...this.threads]) {
+      const anchor = this.anchors.get(thread);
+      const r = thread.range;
+      if (!anchor || !r) {
+        continue;
+      }
+      let lines: string[];
+      try {
+        const buf = await vscode.workspace.fs.readFile(thread.uri);
+        lines = Buffer.from(buf).toString('utf8').split(/\r?\n/);
+      } catch {
+        continue; // ファイルが無い等はそのまま
+      }
+      if (lines[r.start.line]?.trim() === anchor) {
+        thread.label = undefined;
+        continue;
+      }
+      // 近傍(±50行)で一致する行を探す
+      const span = r.end.line - r.start.line;
+      let found = -1;
+      for (let d = 1; d <= 50 && found < 0; d++) {
+        if (lines[r.start.line - d]?.trim() === anchor) {
+          found = r.start.line - d;
+        } else if (lines[r.start.line + d]?.trim() === anchor) {
+          found = r.start.line + d;
+        }
+      }
+      if (found >= 0) {
+        thread.range = new vscode.Range(found, 0, found + span, 0);
+        thread.label = undefined;
+      } else {
+        thread.label = DRIFT_LABEL;
+      }
+    }
+  }
+
+  /** 開いているドキュメントから指定行のテキスト(trim)を得る（アンカー用）。 */
+  private anchorTextFor(uri: vscode.Uri, line: number): string | undefined {
+    const doc = vscode.workspace.textDocuments.find(
+      (d) => d.uri.toString() === uri.toString(),
+    );
+    if (!doc || line >= doc.lineCount) {
+      return undefined;
+    }
+    const t = doc.lineAt(line).text.trim();
+    return t.length > 0 ? t : undefined;
   }
 
   /** 現在の全スレッドを workspaceState に保存する（ローカル永続化）。 */
@@ -91,6 +153,7 @@ export class CommentStore implements vscode.Disposable {
         uri: t.uri.toString(),
         line: t.range?.start.line ?? 0,
         endLine: t.range?.end.line ?? t.range?.start.line ?? 0,
+        anchor: this.anchors.get(t),
         comments: t.comments.map((c) =>
           typeof c.body === 'string' ? c.body : c.body.value,
         ),
@@ -105,6 +168,13 @@ export class CommentStore implements vscode.Disposable {
     const thread = reply.thread;
     thread.comments = [...thread.comments, new ReviewComment(reply.text, thread)];
     thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+    // アンカー行テキストを記録（再起動後の行ズレ追従用）。
+    if (!this.anchors.has(thread) && thread.range) {
+      const a = this.anchorTextFor(thread.uri, thread.range.start.line);
+      if (a) {
+        this.anchors.set(thread, a);
+      }
+    }
     this.threads.add(thread);
     this.persist();
   }
