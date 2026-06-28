@@ -66,103 +66,124 @@
     "commands": [
       {
         "command": "ponpokoReview.refresh",
-        "title": "ponpoko-review: ツリーを更新",
-        "icon": "$(refresh)"
+        "title": "ツリーを更新",
+        "icon": "$(refresh)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.gotoComment",
-        "title": "ponpoko-review: コメントへ移動",
-        "icon": "$(comment)"
+        "title": "コメントへ移動",
+        "icon": "$(comment)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.submit",
-        "title": "ponpoko-review: レビューを書き出す (Submit)",
-        "icon": "$(export)"
+        "title": "レビューを書き出す (Submit)",
+        "icon": "$(export)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.clear",
-        "title": "ponpoko-review: コメントを全消去 (Clear)",
-        "icon": "$(trash)"
+        "title": "コメントを全消去 (Clear)",
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.addComment",
-        "title": "ponpoko-review: コメントを追加"
+        "title": "コメントを追加",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.editComment",
         "title": "編集",
-        "icon": "$(edit)"
+        "icon": "$(edit)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.saveComment",
-        "title": "保存"
+        "title": "保存",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.cancelComment",
-        "title": "キャンセル"
+        "title": "キャンセル",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.deleteComment",
         "title": "削除",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.toggleResolve",
         "title": "Resolve / Unresolve",
-        "icon": "$(pass)"
+        "icon": "$(pass)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.setBase",
-        "title": "ponpoko-review: 既定の比較先(base)を選択"
+        "title": "既定の比較先(base)を選択",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.setOutputDir",
-        "title": "ponpoko-review: 出力先ディレクトリを設定"
+        "title": "出力先ディレクトリを設定",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.settings",
-        "title": "ponpoko-review: 設定",
-        "icon": "$(gear)"
+        "title": "設定",
+        "icon": "$(gear)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.viewAsTree",
-        "title": "ponpoko-review: ツリー表示にする",
-        "icon": "$(list-tree)"
+        "title": "ツリー表示にする",
+        "icon": "$(list-tree)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.viewAsList",
-        "title": "ponpoko-review: リスト表示にする",
-        "icon": "$(list-flat)"
+        "title": "リスト表示にする",
+        "icon": "$(list-flat)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.cycleViewMode",
-        "title": "ponpoko-review: 表示モードを切り替え (list/tree)",
-        "icon": "$(list-tree)"
+        "title": "表示モードを切り替え (list/tree)",
+        "icon": "$(list-tree)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.commentsFilterOn",
-        "title": "ponpoko-review: コメントのあるファイルだけ表示",
-        "icon": "$(filter)"
+        "title": "コメントのあるファイルだけ表示",
+        "icon": "$(filter)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.commentsFilterOff",
-        "title": "ponpoko-review: コメント絞り込みを解除",
-        "icon": "$(filter-filled)"
+        "title": "コメント絞り込みを解除",
+        "icon": "$(filter-filled)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.submitWorktree",
-        "title": "ponpoko-review: このworktreeのコメントを書き出す",
-        "icon": "$(export)"
+        "title": "このworktreeのコメントを書き出す",
+        "icon": "$(export)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.clearWorktree",
-        "title": "ponpoko-review: このworktreeのコメントをクリア",
-        "icon": "$(trash)"
+        "title": "このworktreeのコメントをクリア",
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
       },
       {
         "command": "ponpokoReview.setWorktreeBase",
-        "title": "ponpoko-review: このworktreeの比較先(target)を設定",
-        "icon": "$(git-branch)"
+        "title": "このworktreeの比較先(target)を設定",
+        "icon": "$(git-branch)",
+        "category": "ponpoko-review"
       }
     ],
     "menus": {
@@ -255,6 +276,52 @@
           "command": "ponpokoReview.cancelComment",
           "when": "commentController == ponpokoReview && comment == canEdit",
           "group": "inline@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ponpokoReview.addComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.editComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.cancelComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.deleteComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.toggleResolve",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openDiff",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.submitWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.clearWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.setWorktreeBase",
+          "when": "false"
         }
       ]
     }
