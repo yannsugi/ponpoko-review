@@ -1,0 +1,358 @@
+{
+  "name": "ponpoko-review",
+  "displayName": "ponpoko-review",
+  "description": "ブランチ間diffをツリー表示し、PRレビュー風インラインコメントをworktree単位でMarkdownに出力する個人用拡張",
+  "version": "0.0.1",
+  "publisher": "yannsugi",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yannsugi/ponpoko-review.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "git CLI を実行するため、信頼済みワークスペースでのみ動作します。"
+    }
+  },
+  "activationEvents": [],
+  "contributes": {
+    "configuration": {
+      "title": "ponpoko-review",
+      "properties": {
+        "ponpokoReview.baseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "比較基準ブランチ（base...HEAD の base）。"
+        },
+        "ponpokoReview.outputDir": {
+          "type": "string",
+          "default": ".ponpoko-review",
+          "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md を書き出す。"
+        },
+        "ponpokoReview.afterSubmit": {
+          "type": "string",
+          "enum": ["resolve", "clear", "none"],
+          "enumDescriptions": [
+            "出力したコメントを自動で Resolve（既定・後から解除可能）",
+            "出力したコメントを自動で削除（復元不可）",
+            "何もしない（エディタ上の各コメントから手動で Resolve）"
+          ],
+          "default": "resolve",
+          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。既定は自動 Resolve（＝未送信のコメントだけ残る）。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ponpokoReview",
+          "title": "ponpoko-review",
+          "icon": "media/ponpoko-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ponpokoReview": [
+        {
+          "id": "ponpokoReview.diffTree",
+          "name": "Diff Tree"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ponpokoReview.diffTree",
+        "contents": "Git リポジトリが見つからないか、worktree がありません。\nGit リポジトリのフォルダを開いてください。"
+      }
+    ],
+    "commands": [
+      {
+        "command": "ponpokoReview.refresh",
+        "title": "ツリーを更新",
+        "icon": "$(refresh)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.gotoComment",
+        "title": "コメントへ移動",
+        "icon": "$(comment)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.submit",
+        "title": "レビューを書き出す (Submit)",
+        "icon": "$(export)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.clear",
+        "title": "コメントを全消去 (Clear)",
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment",
+        "title": "コメントを追加",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.editComment",
+        "title": "編集",
+        "icon": "$(edit)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.saveComment",
+        "title": "保存",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.cancelComment",
+        "title": "キャンセル",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.deleteComment",
+        "title": "削除",
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.toggleResolve",
+        "title": "Resolve / Unresolve",
+        "icon": "$(pass)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.setBase",
+        "title": "既定の比較先(base)を選択",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.setOutputDir",
+        "title": "出力先ディレクトリを設定",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.openReview",
+        "title": "レビュー md (review.md) を開く",
+        "icon": "$(go-to-file)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.settings",
+        "title": "設定",
+        "icon": "$(gear)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.viewAsTree",
+        "title": "ツリー表示にする",
+        "icon": "$(list-tree)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.viewAsList",
+        "title": "リスト表示にする",
+        "icon": "$(list-flat)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.cycleViewMode",
+        "title": "表示モードを切り替え (list/tree)",
+        "icon": "$(list-tree)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.commentsFilterOn",
+        "title": "コメントのあるファイルだけ表示",
+        "icon": "$(filter)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.commentsFilterOff",
+        "title": "コメント絞り込みを解除",
+        "icon": "$(filter-filled)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.submitWorktree",
+        "title": "このworktreeのコメントを書き出す",
+        "icon": "$(export)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.clearWorktree",
+        "title": "このworktreeのコメントをクリア",
+        "icon": "$(trash)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.setWorktreeBase",
+        "title": "このworktreeの比較先(target)を設定",
+        "icon": "$(git-branch)",
+        "category": "ponpoko-review"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ponpokoReview.cycleViewMode",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ponpokoReview.commentsFilterOn",
+          "when": "view == ponpokoReview.diffTree && !ponpokoReview.commentsOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.commentsFilterOff",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.commentsOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.settings",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@9"
+        },
+        {
+          "command": "ponpokoReview.refresh",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ponpokoReview.submit",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@4"
+        },
+        {
+          "command": "ponpokoReview.clear",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ponpokoReview.setWorktreeBase",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.submitWorktree",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.clearWorktree",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@2"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "ponpokoReview.addComment",
+          "group": "inline"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "ponpokoReview.toggleResolve",
+          "when": "commentController == ponpokoReview",
+          "group": "inline@1"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "ponpokoReview.editComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "group@1"
+        },
+        {
+          "command": "ponpokoReview.deleteComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "group@2"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "ponpokoReview.saveComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.cancelComment",
+          "when": "commentController == ponpokoReview && comment == canEdit",
+          "group": "inline@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ponpokoReview.addComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.editComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.cancelComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.deleteComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.toggleResolve",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openDiff",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.submitWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.clearWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.setWorktreeBase",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "3.9.2",
+    "typescript": "5.9.3"
+  }
+}
