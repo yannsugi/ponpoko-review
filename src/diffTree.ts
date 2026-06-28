@@ -60,7 +60,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   private mode: ViewMode = 'list';
   private commentsOnly = false;
-  private showComments = true;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
 
@@ -100,18 +99,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
    */
   softRefresh(): void {
     this._onDidChangeTreeData.fire();
-  }
-
-  getShowComments(): boolean {
-    return this.showComments;
-  }
-
-  /** ツリー上のコメント表示（子ノード・💬・フォルダ集計）をまとめてON/OFF。 */
-  setShowComments(on: boolean): void {
-    if (this.showComments !== on) {
-      this.showComments = on;
-      this._onDidChangeTreeData.fire();
-    }
   }
 
   getCommentsOnly(): boolean {
@@ -278,13 +265,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private fileItem(node: FileNode): vscode.TreeItem {
     const { entry } = node;
     const fsPath = path.join(node.worktree.path, entry.path);
-    // 💬（有無/件数）は常時表示。子ノード展開は showComments のときだけ。
     const comments = this.commentsOf(fsPath);
     // tree モードはベース名、list モードはフルパスを表示。
     const label = this.mode === 'tree' ? entry.path.split('/').pop()! : entry.path;
+    // コメントがあれば展開してコメント子ノードを出す。
     const item = new vscode.TreeItem(
       label,
-      this.showComments && comments.length > 0
+      comments.length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
@@ -363,9 +350,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
 
     if (node.kind === 'file') {
-      if (!this.showComments) {
-        return [];
-      }
       // ファイルの子＝そのファイルのコメント。
       const fsPath = path.join(node.worktree.path, node.entry.path);
       const uri = vscode.Uri.file(fsPath);

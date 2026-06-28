@@ -150,16 +150,6 @@
         "icon": "$(filter-filled)"
       },
       {
-        "command": "ponpokoReview.hideComments",
-        "title": "ponpoko-review: ファイル配下のコメントを畳む",
-        "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "ponpokoReview.showComments",
-        "title": "ponpoko-review: ファイル配下のコメントを展開可能に",
-        "icon": "$(comment)"
-      },
-      {
         "command": "ponpokoReview.submitWorktree",
         "title": "ponpoko-review: このworktreeのコメントを書き出す",
         "icon": "$(export)"
@@ -190,16 +180,6 @@
         {
           "command": "ponpokoReview.commentsFilterOff",
           "when": "view == ponpokoReview.diffTree && ponpokoReview.commentsOnly",
-          "group": "navigation@1"
-        },
-        {
-          "command": "ponpokoReview.hideComments",
-          "when": "view == ponpokoReview.diffTree && ponpokoReview.showComments",
-          "group": "navigation@1"
-        },
-        {
-          "command": "ponpokoReview.showComments",
-          "when": "view == ponpokoReview.diffTree && !ponpokoReview.showComments",
           "group": "navigation@1"
         },
         {
