@@ -2,7 +2,7 @@
   "name": "ponpoko-review",
   "displayName": "ponpoko-review",
   "description": "ブランチ間diffをツリー表示し、PRレビュー風インラインコメントをworktree単位でMarkdownに出力する個人用拡張",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "yannsugi",
   "private": true,
   "license": "MIT",
@@ -40,7 +40,11 @@
         },
         "ponpokoReview.afterSubmit": {
           "type": "string",
-          "enum": ["resolve", "clear", "none"],
+          "enum": [
+            "resolve",
+            "clear",
+            "none"
+          ],
           "enumDescriptions": [
             "出力したコメントを自動で Resolve（既定・後から解除可能）",
             "出力したコメントを自動で削除（復元不可）",
