@@ -31,15 +31,26 @@ export function activate(context: vscode.ExtensionContext): void {
     emptyLabel: string,
     combined: boolean,
   ): Promise<void> => {
-    if (threads.length === 0) {
-      vscode.window.showWarningMessage(`ponpoko-review: ${emptyLabel}コメントがありません。`);
+    // Resolve 済みは「対応済み」として出力から除外する。
+    const resolved = threads.filter(
+      (t) => t.state === vscode.CommentThreadState.Resolved,
+    ).length;
+    const active = threads.filter(
+      (t) => t.state !== vscode.CommentThreadState.Resolved,
+    );
+    if (active.length === 0) {
+      vscode.window.showWarningMessage(
+        `ponpoko-review: ${emptyLabel}出力するコメントがありません` +
+          (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '') +
+          '。',
+      );
       return;
     }
     try {
       const result = await writeReview({
         outputRoot: resolveOutputRoot(),
         resolveBase: (wtPath) => treeProvider.getBase(wtPath),
-        threads,
+        threads: active,
         worktrees,
         combined,
       });
@@ -48,8 +59,13 @@ export function activate(context: vscode.ExtensionContext): void {
         const doc = await vscode.workspace.openTextDocument(result.files[0]);
         await vscode.window.showTextDocument(doc, { preview: false });
       }
+      const where = result.files
+        .map((f) => path.relative(repoRoot, f) || f)
+        .join(', ');
       vscode.window.showInformationMessage(
-        `ponpoko-review: ${result.itemCount} 件を ${result.files.length} ファイルに書き出しました。`,
+        `ponpoko-review: ${result.itemCount} 件を ${where} に書き出しました` +
+          (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '') +
+          '。',
       );
     } catch (err) {
       vscode.window.showErrorMessage(
