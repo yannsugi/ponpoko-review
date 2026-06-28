@@ -106,10 +106,10 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBar.command = 'ponpokoReview.gotoComment';
   context.subscriptions.push(statusBar);
   const updateStatusBar = () => {
-    const n = store.total();
+    const n = store.activeCount(); // 出力対象（未解決）の件数
     if (n > 0) {
       statusBar.text = `$(comment) ${n}`;
-      statusBar.tooltip = `ponpoko-review: 未提出コメント ${n} 件`;
+      statusBar.tooltip = `ponpoko-review: 未提出のコメント ${n} 件`;
       statusBar.show();
     } else {
       statusBar.hide();
@@ -255,9 +255,11 @@ export function activate(context: vscode.ExtensionContext): void {
       return openDiff(treeProvider.getBase(node.worktree.path), node);
     }),
 
-    // コメントへクイックアクセス（QuickPick → diff を開いて該当行へ）。
+    // コメントへクイックアクセス（QuickPick → diff を開いて該当行へ）。未解決のみ。
     vscode.commands.registerCommand('ponpokoReview.gotoComment', async () => {
-      const threads = store.getThreads();
+      const threads = store
+        .getThreads()
+        .filter((t) => t.state !== vscode.CommentThreadState.Resolved);
       if (threads.length === 0) {
         vscode.window.showInformationMessage('ponpoko-review: コメントがありません。');
         return;
@@ -318,7 +320,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand(
       'ponpokoReview.toggleResolve',
-      (thread: vscode.CommentThread) => store.toggleResolve(thread),
+      (thread: vscode.CommentThread) => {
+        store.toggleResolve(thread);
+        onCommentsChanged(); // 解決/未解決でツリー・件数を更新
+      },
     ),
 
     vscode.commands.registerCommand('ponpokoReview.submit', async () => {

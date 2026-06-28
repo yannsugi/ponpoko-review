@@ -261,21 +261,26 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads].filter((t) => isUnderPath(worktreePath, t.uri.fsPath));
   }
 
-  /** 指定ディレクトリ配下のコメント数（フォルダ/worktree 集計用）。 */
+  /** 指定ディレクトリ配下の未解決コメント数（フォルダ/worktree 集計用）。 */
   countUnder(dirPath: string): number {
-    return this.getThreadsUnder(dirPath).length;
+    return this.getThreadsUnder(dirPath).filter(isActive).length;
   }
 
-  /** 保持中のコメント総数。 */
+  /** 保持中の全スレッド数（Resolve済み含む。Clear 用）。 */
   total(): number {
     return this.threads.size;
   }
 
-  /** 指定ファイル(uri.fsPath)に付いているコメントの一覧（行範囲＋本文）。行順。 */
+  /** 未解決（出力対象）のコメント数。ステータスバー用。 */
+  activeCount(): number {
+    return [...this.threads].filter(isActive).length;
+  }
+
+  /** 指定ファイル(uri.fsPath)の未解決コメント一覧（行範囲＋本文）。行順。 */
   listFor(fsPath: string): { line: number; endLine: number; text: string }[] {
     const res: { line: number; endLine: number; text: string }[] = [];
     for (const t of this.threads) {
-      if (t.uri.fsPath === fsPath && t.comments.length > 0) {
+      if (t.uri.fsPath === fsPath && t.comments.length > 0 && isActive(t)) {
         const r = threadLineRange(t);
         res.push({ line: r.start, endLine: r.end, text: threadText(t) });
       }
@@ -317,6 +322,11 @@ export class CommentStore implements vscode.Disposable {
     this.threads.clear();
     this.controller.dispose();
   }
+}
+
+/** 未解決（出力対象）スレッドか。Resolve 済みは false。 */
+function isActive(t: vscode.CommentThread): boolean {
+  return t.state !== vscode.CommentThreadState.Resolved;
 }
 
 /** fsPath が dir 配下かどうか。 */
