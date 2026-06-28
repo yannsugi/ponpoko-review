@@ -259,6 +259,15 @@ export class CommentStore implements vscode.Disposable {
     this.persist();
   }
 
+  /** 複数スレッドをまとめて削除する（Submit 後の clear 用）。 */
+  removeThreads(threads: vscode.CommentThread[]): void {
+    for (const t of threads) {
+      t.dispose();
+      this.threads.delete(t);
+    }
+    this.persist();
+  }
+
   /** 保持中の全スレッドを返す（md 書き出し用）。 */
   getThreads(): vscode.CommentThread[] {
     return [...this.threads];

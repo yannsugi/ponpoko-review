@@ -62,16 +62,31 @@ export function activate(context: vscode.ExtensionContext): void {
       const where = result.files
         .map((f) => path.relative(repoRoot, f) || f)
         .join(', ');
-      // 出力した分を Resolve してループを閉じられるよう、ボタンを添える。
-      const choice = await vscode.window.showInformationMessage(
+      const head =
         `ponpoko-review: ${result.itemCount} 件を ${where} に書き出しました` +
-          (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '') +
-          '。',
-        '出力分を Resolve',
-      );
-      if (choice === '出力分を Resolve') {
+        (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '');
+      // 出力後の扱いは設定 afterSubmit に従う（none/resolve/clear）。
+      const after = vscode.workspace
+        .getConfiguration('ponpokoReview')
+        .get<string>('afterSubmit', 'none');
+      if (after === 'resolve') {
         store.resolveThreads(active);
         onCommentsChanged();
+        vscode.window.showInformationMessage(`${head}（出力分を Resolve）。`);
+      } else if (after === 'clear') {
+        store.removeThreads(active);
+        onCommentsChanged();
+        vscode.window.showInformationMessage(`${head}（出力分を削除）。`);
+      } else {
+        // none: 通知のボタンから手動で Resolve できる。
+        const choice = await vscode.window.showInformationMessage(
+          `${head}。`,
+          '出力分を Resolve',
+        );
+        if (choice === '出力分を Resolve') {
+          store.resolveThreads(active);
+          onCommentsChanged();
+        }
       }
     } catch (err) {
       vscode.window.showErrorMessage(

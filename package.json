@@ -37,6 +37,17 @@
           "type": "string",
           "default": ".ponpoko-review",
           "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md を書き出す。"
+        },
+        "ponpokoReview.afterSubmit": {
+          "type": "string",
+          "enum": ["none", "resolve", "clear"],
+          "enumDescriptions": [
+            "何もしない（通知のボタンから手動で Resolve 可）",
+            "出力したコメントを自動で Resolve（後から解除可能）",
+            "出力したコメントを自動で削除（復元不可）"
+          ],
+          "default": "none",
+          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。"
         }
       }
     },
