@@ -1,7 +1,7 @@
 require('./vscode-stub.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { dirChildren, compactDir, worktreeName } = require('../out/diffTree.js');
+const { dirChildren, compactDir, worktreeName, isUnderDir } = require('../out/diffTree.js');
 
 const wt = { path: '/repo', branch: 'main', head: 'x', detached: false };
 
@@ -44,4 +44,13 @@ test('compactDir: ファイルがあれば圧縮しない', () => {
     { status: 'A', path: 'a/b/c.ts' },
   ];
   assert.strictEqual(compactDir(entries, 'a'), 'a');
+});
+
+test('isUnderDir: 出力先配下の判定', () => {
+  const out = '/repo/.ponpoko-review';
+  assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review/review.md'), true);
+  assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review/wt/review.md'), true);
+  assert.strictEqual(isUnderDir(out, '/repo/src/a.ts'), false);
+  assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review'), false); // dir自身は除く
+  assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review-x/a'), false); // 前方一致の誤判定なし
 });

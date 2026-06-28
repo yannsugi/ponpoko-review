@@ -125,6 +125,14 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
   }
 
+  /** レビューmdの出力先（絶対パス）。ツリーから除外する自分の成果物の場所。 */
+  private outputRoot(): string {
+    const setting = vscode.workspace
+      .getConfiguration('ponpokoReview')
+      .get<string>('outputDir', '.ponpoko-review');
+    return path.isAbsolute(setting) ? setting : path.join(this.repoRoot, setting);
+  }
+
   /** グローバル設定の比較基準ブランチ（既定: main）。 */
   getGlobalBase(): string {
     return vscode.workspace
@@ -390,7 +398,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     }
     const base = this.getBase(worktree.path);
     try {
-      const entries = await diffNameStatus(base, worktree.path);
+      const all = await diffNameStatus(base, worktree.path);
+      // 自分の出力物（レビューmdの出力先）配下はレビュー対象にしない。
+      const out = this.outputRoot();
+      const entries = all.filter(
+        (e) => !isUnderDir(out, path.join(worktree.path, e.path)),
+      );
       this.cache.set(key, entries);
       // viewed のうち、チェック時点から中身が変わったものは自動で外す（バッチ）。
       await this.revalidateViewed(base, worktree, entries);
@@ -497,4 +510,10 @@ export function compactDir(entries: DiffEntry[], dir: string): string {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** fsPath が dir 配下（dir 自身は除く）かどうか。 */
+export function isUnderDir(dir: string, fsPath: string): boolean {
+  const rel = path.relative(dir, fsPath);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
