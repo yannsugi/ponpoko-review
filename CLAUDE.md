@@ -8,7 +8,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 拡張の責務は「配管」だけ＝コメント収集 → md 整形 → 書き出し。**修正ロジックは絶対に持たせない**。
 
 ## ビルド / 実行
-- `npm install`
+- `npm ci`（再現性。devDependencies は exact 固定・runtime依存は無し）/ 追加時は `npm install --save-exact`
 - `npm run compile`（`tsc -p ./` → `out/`）/ `npm run watch`
 - デバッグ起動: VS Code で `F5`（Extension Development Host）。`.vscode/launch.json` 済み。
 - テストは無し。動作確認は F5 と、純粋関数は `node -e` で `out/*.js` を叩いて確認する。
@@ -52,6 +52,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 ## セキュリティ
 - `execFile` のみ（シェル注入なし）。`assertSafeRef` で引数注入対策。
 - `package.json` の `capabilities.untrustedWorkspaces:false`（未信頼ワークスペースでは無効）。
+- runtime の `dependencies` ゼロ（攻撃面はビルド時のみ）。devDependencies は exact 固定＋lock 同梱で `npm ci` 再現。`@types/vscode` は engines 最小(1.90.0)に一致させ、新しすぎる API の誤用を型で検出。
 
 ## ブランチ運用
 - 足場は `main`、機能実装は feature ブランチ（例 `feature/diff-tree`）。

@@ -350,9 +350,9 @@
     "test": "npm run compile && node --test"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.90.0",
-    "@vscode/vsce": "^3.9.2",
-    "typescript": "^5.4.0"
+    "@types/node": "20.19.43",
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "3.9.2",
+    "typescript": "5.9.3"
   }
 }
