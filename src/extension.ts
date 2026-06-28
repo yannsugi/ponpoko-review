@@ -472,14 +472,30 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showInformationMessage(`ponpoko-review: 出力先を ${value.trim()} に設定しました。`);
     }),
 
+    // 既存の review.md を開く（再 Submit せずに見たいとき用）。
+    vscode.commands.registerCommand('ponpokoReview.openReview', async () => {
+      const file = vscode.Uri.file(path.join(resolveOutputRoot(), 'review.md'));
+      try {
+        await vscode.workspace.fs.stat(file);
+      } catch {
+        vscode.window.showInformationMessage(
+          'ponpoko-review: まだ review.md がありません。Submit で書き出してください。',
+        );
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(file);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+
     // 上部の設定メニュー（diffには出さないグローバル設定の入口）。
     vscode.commands.registerCommand('ponpokoReview.settings', async () => {
       const items: (vscode.QuickPickItem & { cmd: string })[] = [
+        { label: '$(go-to-file) レビュー md (review.md) を開く', cmd: 'ponpokoReview.openReview' },
         { label: '$(folder) 出力先ディレクトリを設定', cmd: 'ponpokoReview.setOutputDir' },
         { label: '$(git-branch) 既定の比較先(base)を選択', cmd: 'ponpokoReview.setBase' },
       ];
       const picked = await vscode.window.showQuickPick(items, {
-        placeHolder: 'ponpoko-review 設定',
+        placeHolder: 'ponpoko-review',
       });
       if (picked) {
         await vscode.commands.executeCommand(picked.cmd);

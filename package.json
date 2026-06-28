@@ -143,6 +143,12 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.openReview",
+        "title": "レビュー md (review.md) を開く",
+        "icon": "$(go-to-file)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.settings",
         "title": "設定",
         "icon": "$(gear)",
