@@ -1,6 +1,8 @@
 .vscode/**
 src/**
 test/**
+.github/**
+docs/**
 media/*.gen.js
 **/*.drawio
 media/README.md
