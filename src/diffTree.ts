@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DiffEntry, Worktree, diffNameStatus, viewHashes, worktreeList } from './git';
+import {
+  DiffEntry,
+  Worktree,
+  defaultBaseBranch,
+  diffNameStatus,
+  refExists,
+  viewHashes,
+  worktreeList,
+} from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 
@@ -63,6 +71,10 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private commentsOnly = false;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
+  /** worktreePath → 実在を確認した解決済み base（フォールバック後の実値）。 */
+  private readonly baseCache = new Map<string, string>();
+  /** フォールバック警告を出した worktree（毎回出さないため）。 */
+  private readonly baseWarned = new Set<string>();
 
   constructor(
     private readonly repoRoot: string,
@@ -91,6 +103,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   /** 差分データから取り直す全更新（git diff 再実行）。保存・base変更時など。 */
   refresh(): void {
     this.cache.clear();
+    this.baseCache.clear();
+    this.baseWarned.clear();
     this._onDidChangeTreeData.fire();
   }
 
@@ -140,11 +154,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       .get<string>('baseBranch', 'main');
   }
 
-  /**
-   * 比較基準(base/target)ブランチを返す。
-   * worktreePath を渡すとその worktree の上書きを優先し、無ければグローバル設定。
-   */
-  getBase(worktreePath?: string): string {
+  /** 設定/個別上書きの生の base（実在チェック前）。 */
+  private configuredBase(worktreePath?: string): string {
     if (worktreePath) {
       const override = this.baseStore.get(worktreePath);
       if (override) {
@@ -152,6 +163,48 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       }
     }
     return this.getGlobalBase();
+  }
+
+  /**
+   * 比較基準(base/target)ブランチを返す。
+   * 解決済み（実在確認＋フォールバック後）があればそれ、無ければ設定値。
+   */
+  getBase(worktreePath?: string): string {
+    if (worktreePath) {
+      const resolved = this.baseCache.get(worktreePath);
+      if (resolved) {
+        return resolved;
+      }
+    }
+    return this.configuredBase(worktreePath);
+  }
+
+  /**
+   * 実在する base を解決する。設定値が無ければ既定ブランチを推定してフォールバック。
+   * どれも無ければ null（呼び出し側でエラー表示）。
+   */
+  private async resolveBase(worktree: Worktree): Promise<string | null> {
+    const cached = this.baseCache.get(worktree.path);
+    if (cached) {
+      return cached;
+    }
+    const want = this.configuredBase(worktree.path);
+    if (await refExists(want, worktree.path)) {
+      this.baseCache.set(worktree.path, want);
+      return want;
+    }
+    const fallback = await defaultBaseBranch(worktree.path);
+    if (fallback) {
+      this.baseCache.set(worktree.path, fallback);
+      if (!this.baseWarned.has(worktree.path)) {
+        this.baseWarned.add(worktree.path);
+        vscode.window.showWarningMessage(
+          `ponpoko-review: 比較先 '${want}' が見つかりません。'${fallback}' で比較します（設定で変更可）。`,
+        );
+      }
+      return fallback;
+    }
+    return null;
   }
 
   /** その worktree が個別 base を上書きしているか。 */
@@ -327,6 +380,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
         return [];
       }
+      // worktree ラベルが解決済み base を表示できるよう、先に base を解決(実在確認＋フォールバック)。
+      await Promise.all(worktrees.map((w) => this.resolveBase(w)));
       let nodes: DiffNode[] = worktrees.map((worktree) => ({ kind: 'worktree', worktree }));
       if (this.commentsOnly) {
         // コメントのある worktree だけ残す。
@@ -396,7 +451,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     if (cached) {
       return cached;
     }
-    const base = this.getBase(worktree.path);
+    const base = await this.resolveBase(worktree);
+    if (base === null) {
+      vscode.window.showErrorMessage(
+        `ponpoko-review: ${worktreeName(worktree)}: 比較先ブランチが見つかりません。設定 'ponpokoReview.baseBranch' で指定してください。`,
+      );
+      return null;
+    }
     try {
       const all = await diffNameStatus(base, worktree.path);
       // 自分の出力物（レビューmdの出力先）配下はレビュー対象にしない。

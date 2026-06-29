@@ -256,6 +256,51 @@ export async function listBranches(cwd: string): Promise<string[]> {
   return out;
 }
 
+/** ref が存在し commit に解決できるか。 */
+export async function refExists(ref: string, cwd: string): Promise<boolean> {
+  try {
+    assertSafeRef(ref);
+    await runGit(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * リポジトリの既定ブランチを推定する。
+ * origin/HEAD（リモート既定）→ main → master → origin/main → origin/master →
+ * 最初のローカルブランチ、の順で実在するものを返す。見つからなければ undefined。
+ */
+export async function defaultBaseBranch(cwd: string): Promise<string | undefined> {
+  // リモートの既定（clone 時に設定される origin/HEAD）
+  try {
+    const r = (await runGit(['rev-parse', '--abbrev-ref', 'origin/HEAD'], cwd)).trim();
+    if (r && r !== 'origin/HEAD') {
+      return r; // 例: origin/main
+    }
+  } catch {
+    // origin/HEAD 未設定など
+  }
+  for (const c of ['main', 'master', 'origin/main', 'origin/master']) {
+    if (await refExists(c, cwd)) {
+      return c;
+    }
+  }
+  // 最後の手段: 最初のローカルブランチ
+  try {
+    const b = (
+      await runGit(['for-each-ref', '--count=1', '--format=%(refname:short)', 'refs/heads'], cwd)
+    ).trim();
+    if (b) {
+      return b;
+    }
+  } catch {
+    // ブランチ皆無
+  }
+  return undefined;
+}
+
 /** base 側にそのパスが存在するか（git show が成功するか）を判定する。 */
 export async function existsAtBase(base: string, path: string, cwd: string): Promise<boolean> {
   try {
