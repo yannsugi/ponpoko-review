@@ -31,7 +31,7 @@
         "ponpokoReview.baseBranch": {
           "type": "string",
           "default": "main",
-          "description": "比較基準ブランチ（base...HEAD の base）。"
+          "description": "比較基準ブランチ（base...HEAD の base）。remote-tracking ブランチ（例: origin/main）も指定可。"
         },
         "ponpokoReview.outputDir": {
           "type": "string",

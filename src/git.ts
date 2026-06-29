@@ -231,16 +231,29 @@ export async function viewHashes(
   return result;
 }
 
-/** ローカルブランチ名の一覧を返す。 */
+/**
+ * 比較先候補のブランチ一覧。ローカル(refs/heads)に加え、
+ * remote-tracking(refs/remotes, 例: origin/main)も含める。
+ * remote を base にすると「ローカルが古くても、最後に fetch したリモートの状態」と比較できる。
+ * origin/HEAD 等のシンボリック別名（末尾 /HEAD）は除外。
+ */
 export async function listBranches(cwd: string): Promise<string[]> {
+  // %(symref) はシンボリック ref(origin/HEAD 等)のときだけ非空 → それを除外する。
   const stdout = await runGit(
-    ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
+    ['for-each-ref', '--format=%(refname:short)\t%(symref)', 'refs/heads', 'refs/remotes'],
     cwd,
   );
-  return stdout
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const out: string[] = [];
+  for (const line of stdout.split('\n')) {
+    if (!line) {
+      continue;
+    }
+    const [name, symref] = line.split('\t');
+    if (name && !symref) {
+      out.push(name.trim());
+    }
+  }
+  return out;
 }
 
 /** base 側にそのパスが存在するか（git show が成功するか）を判定する。 */
