@@ -177,6 +177,18 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.hideViewedOn",
+        "title": "表示済み(viewed)を隠す",
+        "icon": "$(eye)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.hideViewedOff",
+        "title": "表示済み(viewed)も表示",
+        "icon": "$(eye-closed)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.commentsFilterOn",
         "title": "コメントのあるファイルだけ表示",
         "icon": "$(filter)",
@@ -213,6 +225,16 @@
           "command": "ponpokoReview.cycleViewMode",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@0"
+        },
+        {
+          "command": "ponpokoReview.hideViewedOn",
+          "when": "view == ponpokoReview.diffTree && !ponpokoReview.hideViewed",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ponpokoReview.hideViewedOff",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.hideViewed",
+          "group": "navigation@2"
         },
         {
           "command": "ponpokoReview.commentsFilterOn",
