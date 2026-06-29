@@ -72,6 +72,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private hideViewed = false;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
+  /** worktree 一覧キャッシュ（softRefresh のたびに git worktree list を叩かない）。 */
+  private worktreesCache?: Worktree[];
   /** worktreePath → 実在を確認した解決済み base（フォールバック後の実値）。 */
   private readonly baseCache = new Map<string, string>();
   /** フォールバック警告を出した worktree（毎回出さないため）。 */
@@ -106,6 +108,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     this.cache.clear();
     this.baseCache.clear();
     this.baseWarned.clear();
+    this.worktreesCache = undefined;
     this._onDidChangeTreeData.fire();
   }
 
@@ -115,6 +118,31 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
    */
   softRefresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  /**
+   * 保存されたファイルが属する worktree のキャッシュだけ無効化する。
+   * （全 worktree を再 git diff せず、該当 1 つだけ次回再取得）。
+   * 自分の出力物(outputDir)やどの worktree にも属さないパスは無視。無効化したら true。
+   */
+  invalidate(fsPath: string): boolean {
+    if (isUnderDir(this.outputRoot(), fsPath)) {
+      return false; // 自分の出力物 → 無関係
+    }
+    // キャッシュ済み worktree のうち、保存パスを含む最長一致のものを探す。
+    let owner: string | undefined;
+    for (const wtPath of this.cache.keys()) {
+      if (fsPath === wtPath || isUnderDir(wtPath, fsPath)) {
+        if (!owner || wtPath.length > owner.length) {
+          owner = wtPath;
+        }
+      }
+    }
+    if (owner) {
+      this.cache.delete(owner);
+      return true;
+    }
+    return false;
   }
 
   getCommentsOnly(): boolean {
@@ -387,11 +415,16 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   async getChildren(node?: DiffNode): Promise<DiffNode[]> {
     if (!node) {
       let worktrees: Worktree[];
-      try {
-        worktrees = await worktreeList(this.repoRoot);
-      } catch (err) {
-        vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
-        return [];
+      if (this.worktreesCache) {
+        worktrees = this.worktreesCache;
+      } else {
+        try {
+          worktrees = await worktreeList(this.repoRoot);
+          this.worktreesCache = worktrees;
+        } catch (err) {
+          vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
+          return [];
+        }
       }
       // worktree ラベルが解決済み base を表示できるよう、先に base を解決(実在確認＋フォールバック)。
       await Promise.all(worktrees.map((w) => this.resolveBase(w)));

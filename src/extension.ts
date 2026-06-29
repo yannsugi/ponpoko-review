@@ -259,14 +259,26 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // ファイル保存で差分が変わりうる → 再検証のためツリーを更新（連続保存はデバウンス）。
+  // ファイル保存で差分が変わりうる → 該当 worktree だけ再取得（全worktree再diffを避ける）。
+  // 連続保存はデバウンスし、保存パスを溜めてからまとめて無効化＋1回だけ再描画。
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  const pendingSaves = new Set<string>();
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(() => {
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      pendingSaves.add(doc.uri.fsPath);
       if (saveTimer) {
         clearTimeout(saveTimer);
       }
-      saveTimer = setTimeout(() => treeProvider.refresh(), 300);
+      saveTimer = setTimeout(() => {
+        let changed = false;
+        for (const p of pendingSaves) {
+          changed = treeProvider.invalidate(p) || changed;
+        }
+        pendingSaves.clear();
+        if (changed) {
+          treeProvider.softRefresh(); // 無効化した worktree だけ再取得、他はキャッシュ流用
+        }
+      }, 300);
     }),
     { dispose: () => saveTimer && clearTimeout(saveTimer) },
   );
