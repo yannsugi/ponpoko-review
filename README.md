@@ -17,9 +17,11 @@ GitHub の PR レビュー体験（インラインコメントを溜めて Submi
 🦝 ponpoko-review（アクティビティバー）
 └─ ponpoko-review        current: feature/diff-tree → target: main
    ├─ 📁 src
-   │   ├─ A  extension.ts      💬2
-   │   └─ M  git.ts
-   └─ A  README.md
+   │   ├─ ＋ extension.ts      💬2
+   │   └─ ● git.ts
+   └─ ＋ README.md
+
+   状態アイコン:  ＋ 追加  /  ● 変更  /  − 削除  /  → リネーム（色付き diff codicon）
 ```
 
 ---
@@ -96,7 +98,7 @@ worktree 行にホバーすると、その worktree 単位の **比較先設定 
 - 各 worktree に `current: <ブランチ> → target: <base>` を表示し、何と何を比較しているかが分かる。
 - 比較はマージベース → 作業ツリー。コミット済みに加え、**未コミットの編集・削除・未追跡ファイル**も出る。
 
-- ファイルの状態は色付きの文字アイコン（`A`/`M`/`D`/`R`）で表示。
+- ファイルの状態は色付きアイコンで表示（追加＝＋ / 変更＝● / 削除＝− / リネーム＝→）。VS Code 標準の diff コーディコン（フォントグリフ）でスクロールを軽く。
 
 ### リスト / ツリー表示の切替
 - ツールバーのボタン1つで **list ⇄ tree を順次切り替え**。

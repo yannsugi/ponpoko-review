@@ -17,8 +17,20 @@ export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
-/** status 文字アイコン(media/status/<s>.svg)を持つ status 集合。 */
-const STATUS_ICON_KEYS = new Set(['a', 'm', 'd', 'r', 'c', 't', 'u']);
+/**
+ * status → コーディコン＋git色。画像(SVG)アイコンはスクロール描画が重いため、
+ * 軽いフォントグリフ(ThemeIcon)を使う。VS Code が差分表示用に用意した
+ * diff-* 系（git 拡張の SCM と同じ語彙）で「差分の状態」を正確に表す。
+ */
+const STATUS_CODICON: Record<string, { icon: string; color: string }> = {
+  A: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  M: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  D: { icon: 'diff-removed', color: 'gitDecoration.deletedResourceForeground' },
+  R: { icon: 'diff-renamed', color: 'gitDecoration.renamedResourceForeground' },
+  C: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  T: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  U: { icon: 'warning', color: 'gitDecoration.conflictingResourceForeground' },
+};
 
 export type ViewMode = 'list' | 'tree';
 
@@ -92,14 +104,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   ) {}
 
   /** status 文字アイコン(A/M/D/R…)の uri。viewed はグレーの -dim 版。 */
-  private statusIcon(status: string, viewed: boolean): vscode.Uri {
-    const k = (status || 'M').toLowerCase();
-    const key = STATUS_ICON_KEYS.has(k) ? k : 'm';
-    return vscode.Uri.joinPath(
-      this.extensionUri,
-      'media',
-      'status',
-      `${key}${viewed ? '-dim' : ''}.svg`,
+  private statusIcon(status: string, viewed: boolean): vscode.ThemeIcon {
+    const deco = STATUS_CODICON[(status || 'M').toUpperCase()] ?? STATUS_CODICON.M;
+    // viewed はグレーアウト。それ以外は git の差分色。
+    return new vscode.ThemeIcon(
+      deco.icon,
+      new vscode.ThemeColor(viewed ? 'disabledForeground' : deco.color),
     );
   }
 
