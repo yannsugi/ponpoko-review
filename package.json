@@ -41,17 +41,17 @@
         "ponpokoReview.afterSubmit": {
           "type": "string",
           "enum": [
-            "resolve",
             "clear",
+            "resolve",
             "none"
           ],
           "enumDescriptions": [
-            "出力したコメントを自動で Resolve（既定・後から解除可能）",
-            "出力したコメントを自動で削除（復元不可）",
-            "何もしない（エディタ上の各コメントから手動で Resolve）"
+            "出力したコメントを削除（ツリーもエディタも消える。md が記録なので既定）",
+            "出力したコメントを Resolve（ツリーからは消えるがエディタにマーカーが残る）",
+            "何もしない（手動で削除/Resolve）"
           ],
-          "default": "resolve",
-          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。既定は自動 Resolve（＝未送信のコメントだけ残る）。"
+          "default": "clear",
+          "description": "Submit でレビューを書き出した後、出力したコメントをどう扱うか。既定は削除（出力済みの内容は review.md に残る）。"
         }
       }
     },
@@ -177,6 +177,18 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.hideViewedOn",
+        "title": "表示済み(viewed)を隠す",
+        "icon": "$(eye)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.hideViewedOff",
+        "title": "表示済み(viewed)も表示",
+        "icon": "$(eye-closed)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.commentsFilterOn",
         "title": "コメントのあるファイルだけ表示",
         "icon": "$(filter)",
@@ -213,6 +225,16 @@
           "command": "ponpokoReview.cycleViewMode",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@0"
+        },
+        {
+          "command": "ponpokoReview.hideViewedOn",
+          "when": "view == ponpokoReview.diffTree && !ponpokoReview.hideViewed",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ponpokoReview.hideViewedOff",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.hideViewed",
+          "group": "navigation@2"
         },
         {
           "command": "ponpokoReview.commentsFilterOn",

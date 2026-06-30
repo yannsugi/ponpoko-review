@@ -69,8 +69,11 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   private mode: ViewMode = 'list';
   private commentsOnly = false;
+  private hideViewed = false;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
+  /** worktree 一覧キャッシュ（softRefresh のたびに git worktree list を叩かない）。 */
+  private worktreesCache?: Worktree[];
   /** worktreePath → 実在を確認した解決済み base（フォールバック後の実値）。 */
   private readonly baseCache = new Map<string, string>();
   /** フォールバック警告を出した worktree（毎回出さないため）。 */
@@ -105,6 +108,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     this.cache.clear();
     this.baseCache.clear();
     this.baseWarned.clear();
+    this.worktreesCache = undefined;
     this._onDidChangeTreeData.fire();
   }
 
@@ -116,6 +120,31 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     this._onDidChangeTreeData.fire();
   }
 
+  /**
+   * 保存されたファイルが属する worktree のキャッシュだけ無効化する。
+   * （全 worktree を再 git diff せず、該当 1 つだけ次回再取得）。
+   * 自分の出力物(outputDir)やどの worktree にも属さないパスは無視。無効化したら true。
+   */
+  invalidate(fsPath: string): boolean {
+    if (isUnderDir(this.outputRoot(), fsPath)) {
+      return false; // 自分の出力物 → 無関係
+    }
+    // キャッシュ済み worktree のうち、保存パスを含む最長一致のものを探す。
+    let owner: string | undefined;
+    for (const wtPath of this.cache.keys()) {
+      if (fsPath === wtPath || isUnderDir(wtPath, fsPath)) {
+        if (!owner || wtPath.length > owner.length) {
+          owner = wtPath;
+        }
+      }
+    }
+    if (owner) {
+      this.cache.delete(owner);
+      return true;
+    }
+    return false;
+  }
+
   getCommentsOnly(): boolean {
     return this.commentsOnly;
   }
@@ -124,6 +153,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   setCommentsOnly(on: boolean): void {
     if (this.commentsOnly !== on) {
       this.commentsOnly = on;
+      this._onDidChangeTreeData.fire();
+    }
+  }
+
+  getHideViewed(): boolean {
+    return this.hideViewed;
+  }
+
+  /** 表示済み(viewed)のファイルをツリーから隠す（list/tree と直交するフィルタ）。 */
+  setHideViewed(on: boolean): void {
+    if (this.hideViewed !== on) {
+      this.hideViewed = on;
       this._onDidChangeTreeData.fire();
     }
   }
@@ -374,11 +415,16 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   async getChildren(node?: DiffNode): Promise<DiffNode[]> {
     if (!node) {
       let worktrees: Worktree[];
-      try {
-        worktrees = await worktreeList(this.repoRoot);
-      } catch (err) {
-        vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
-        return [];
+      if (this.worktreesCache) {
+        worktrees = this.worktreesCache;
+      } else {
+        try {
+          worktrees = await worktreeList(this.repoRoot);
+          this.worktreesCache = worktrees;
+        } catch (err) {
+          vscode.window.showErrorMessage(`ponpoko-review: worktree 列挙に失敗: ${describe(err)}`);
+          return [];
+        }
       }
       // worktree ラベルが解決済み base を表示できるよう、先に base を解決(実在確認＋フォールバック)。
       await Promise.all(worktrees.map((w) => this.resolveBase(w)));
@@ -406,8 +452,20 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
               .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
               .map((entry) => ({ kind: 'file', worktree: node.worktree, entry }))
           : dirChildren(node.worktree, entries, '');
-      const empty = this.commentsOnly ? 'コメントなし' : '差分なし';
-      return children.length > 0 ? children : [{ kind: 'message', label: empty }];
+      if (children.length > 0) {
+        return children;
+      }
+      // 空の理由を正確に（フィルタで消えたのか、元から差分なしか）。
+      const raw = await this.entriesFor(node.worktree);
+      const hadEntries = !!raw && raw.length > 0;
+      const label = !hadEntries
+        ? '差分なし'
+        : this.commentsOnly
+          ? 'コメントなし'
+          : this.hideViewed
+            ? 'すべて表示済み'
+            : '差分なし';
+      return [{ kind: 'message', label }];
     }
 
     if (node.kind === 'dir') {
@@ -433,15 +491,20 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return [];
   }
 
-  /** 表示対象の差分一覧。commentsOnly のときはコメントのあるファイルだけに絞る。 */
+  /** 表示対象の差分一覧。hideViewed / commentsOnly フィルタを適用。 */
   private async visibleEntries(worktree: Worktree): Promise<DiffEntry[] | null> {
     const entries = await this.entriesFor(worktree);
-    if (entries === null || !this.commentsOnly) {
-      return entries;
+    if (entries === null) {
+      return null;
     }
-    return entries.filter(
-      (e) => this.commentsOf(path.join(worktree.path, e.path)).length > 0,
-    );
+    let v = entries;
+    if (this.hideViewed) {
+      v = v.filter((e) => !this.viewed.isViewed(worktree.path, e.path));
+    }
+    if (this.commentsOnly) {
+      v = v.filter((e) => this.commentsOf(path.join(worktree.path, e.path)).length > 0);
+    }
+    return v;
   }
 
   /** worktree の差分一覧を取得（キャッシュ）。失敗時は null。viewed の再検証もここで一度だけ。 */
