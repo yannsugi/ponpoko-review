@@ -201,6 +201,18 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.editIgnore",
+        "title": "無視するファイル(glob)を編集",
+        "icon": "$(circle-slash)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.clearIgnore",
+        "title": "無視を解除",
+        "icon": "$(close)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.submitWorktree",
         "title": "このworktreeのコメントを書き出す",
         "icon": "$(export)",
@@ -265,6 +277,16 @@
           "command": "ponpokoReview.clear",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@5"
+        },
+        {
+          "command": "ponpokoReview.editIgnore",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@6"
+        },
+        {
+          "command": "ponpokoReview.clearIgnore",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.hasIgnore",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [

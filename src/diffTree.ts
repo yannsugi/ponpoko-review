@@ -11,6 +11,7 @@ import {
 } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
+import { IgnoreStore, makeIgnoreMatcher } from './ignore';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
@@ -82,6 +83,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private mode: ViewMode = 'list';
   private commentsOnly = false;
   private hideViewed = false;
+  /** 「無視」する glob 文字列と、その判定関数（パターンから生成）。 */
+  private ignorePattern = '';
+  private ignoreMatcher: (relPath: string) => boolean = () => false;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
   /** worktree 一覧キャッシュ（softRefresh のたびに git worktree list を叩かない）。 */
@@ -101,7 +105,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly commentCountUnder: (dirPath: string) => number,
     /** 拡張のルート uri（status 文字アイコンの解決用）。 */
     private readonly extensionUri: vscode.Uri,
-  ) {}
+    /** 「無視」glob の永続ストア。 */
+    private readonly ignoreStore: IgnoreStore,
+  ) {
+    this.ignorePattern = ignoreStore.get();
+    this.ignoreMatcher = makeIgnoreMatcher(this.ignorePattern);
+  }
 
   /** status 文字アイコン(A/M/D/R…)の uri。viewed はグレーの -dim 版。 */
   private statusIcon(status: string, viewed: boolean): vscode.ThemeIcon {
@@ -177,6 +186,22 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       this.hideViewed = on;
       this._onDidChangeTreeData.fire();
     }
+  }
+
+  getIgnore(): string {
+    return this.ignorePattern;
+  }
+
+  /** 「無視」する glob（カンマ/改行区切り）を設定。永続化＋再描画する。 */
+  async setIgnore(pattern: string): Promise<void> {
+    const next = pattern.trim();
+    if (next === this.ignorePattern) {
+      return;
+    }
+    this.ignorePattern = next;
+    this.ignoreMatcher = makeIgnoreMatcher(next);
+    await this.ignoreStore.set(next);
+    this._onDidChangeTreeData.fire();
   }
 
   getMode(): ViewMode {
@@ -474,7 +499,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
           ? 'コメントなし'
           : this.hideViewed
             ? 'すべて表示済み'
-            : '差分なし';
+            : this.ignorePattern
+              ? '無視パターンで全件非表示'
+              : '差分なし';
       return [{ kind: 'message', label }];
     }
 
@@ -508,6 +535,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       return null;
     }
     let v = entries;
+    if (this.ignorePattern) {
+      v = v.filter((e) => !this.ignoreMatcher(e.path));
+    }
     if (this.hideViewed) {
       v = v.filter((e) => !this.viewed.isViewed(worktree.path, e.path));
     }
