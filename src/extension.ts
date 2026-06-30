@@ -68,7 +68,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // 出力後の扱いは設定 afterSubmit に従う（既定 resolve）。
       const after = vscode.workspace
         .getConfiguration('ponpokoReview')
-        .get<string>('afterSubmit', 'resolve');
+        .get<string>('afterSubmit', 'clear');
       let suffix = '';
       if (after === 'clear') {
         store.removeThreads(active);
