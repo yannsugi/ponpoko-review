@@ -376,6 +376,19 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
 
+    // prefix 付きで追加（[ask]質問 / [nits]任意 / [must]必須 / [memo]メモ・AIへの補足）。
+    // Comments API は入力欄へのテキスト挿入を許さないため、submit 亜種ボタンにする。
+    // prefix はただの本文先頭テキスト（md 出力にそのまま乗る。構造化はしない）。
+    ...(['ask', 'nits', 'must', 'memo'] as const).map((prefix) =>
+      vscode.commands.registerCommand(
+        `ponpokoReview.addComment.${prefix}`,
+        (reply: vscode.CommentReply) => {
+          store.addComment({ ...reply, text: `[${prefix}] ${reply.text}`.trim() });
+          onCommentsChanged();
+        },
+      ),
+    ),
+
     // 個別コメントの編集 / 保存 / キャンセル / 削除 / Resolve。
     vscode.commands.registerCommand('ponpokoReview.editComment', (c: vscode.Comment) =>
       store.editComment(c),

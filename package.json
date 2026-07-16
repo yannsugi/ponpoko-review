@@ -109,6 +109,26 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.addComment.ask",
+        "title": "[ask]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.nits",
+        "title": "[nits]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.must",
+        "title": "[must]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.memo",
+        "title": "[memo]",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.editComment",
         "title": "編集",
         "icon": "$(edit)",
@@ -309,7 +329,23 @@
       "comments/commentThread/context": [
         {
           "command": "ponpokoReview.addComment",
-          "group": "inline"
+          "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.addComment.ask",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.addComment.nits",
+          "group": "inline@2"
+        },
+        {
+          "command": "ponpokoReview.addComment.must",
+          "group": "inline@3"
+        },
+        {
+          "command": "ponpokoReview.addComment.memo",
+          "group": "inline@4"
         }
       ],
       "comments/commentThread/title": [
@@ -346,6 +382,22 @@
       "commandPalette": [
         {
           "command": "ponpokoReview.addComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.ask",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.nits",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.must",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.memo",
           "when": "false"
         },
         {
