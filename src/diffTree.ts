@@ -322,7 +322,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return entries.filter((e) => e.path.startsWith(prefix));
   }
 
-  getTreeItem(node: DiffNode): vscode.TreeItem {
+  getTreeItem(node: DiffNode): vscode.TreeItem | Promise<vscode.TreeItem> {
     if (node.kind === 'worktree') {
       return this.worktreeItem(node);
     }
@@ -377,7 +377,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return item;
   }
 
-  private worktreeItem(node: WorktreeNode): vscode.TreeItem {
+  private async worktreeItem(node: WorktreeNode): Promise<vscode.TreeItem> {
     const item = new vscode.TreeItem(
       worktreeName(node.worktree),
       vscode.TreeItemCollapsibleState.Expanded,
@@ -388,11 +388,25 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
+    // viewed 進捗「✓済/総数」。総数は無視glob適用後（レビュー対象）。hideViewed で
+    // ファイルがツリーから消えても全体進捗が分かるように worktree 行だけに出す。
+    let progress = '';
+    const entries = (await this.entriesFor(node.worktree)) ?? [];
+    const targets = this.ignorePattern
+      ? entries.filter((e) => !this.ignoreMatcher(e.path))
+      : entries;
+    if (targets.length > 0) {
+      const done = targets.filter((e) =>
+        this.viewed.isViewed(node.worktree.path, e.path),
+      ).length;
+      progress = `  ✓${done}/${targets.length}`;
+    }
     // ラベルは簡潔に「current → target」。詳細(意味)は tooltip。上書きは ★、コメントは 💬N。
     const cc = this.commentCountUnder(node.worktree.path);
     item.description =
       `${current} → ${target}` +
       (overridden ? ' ★' : '') +
+      progress +
       (cc > 0 ? `  💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
