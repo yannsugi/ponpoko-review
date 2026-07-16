@@ -32,7 +32,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
 - `src/ignore.ts` — 「無視」glob ストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
-- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。
+- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
 ## 守るべき不変条件（罠）
