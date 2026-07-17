@@ -11,14 +11,27 @@ import {
 } from './git';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
+import { IgnoreStore, makeIgnoreMatcher } from './ignore';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
-/** status 文字アイコン(media/status/<s>.svg)を持つ status 集合。 */
-const STATUS_ICON_KEYS = new Set(['a', 'm', 'd', 'r', 'c', 't', 'u']);
+/**
+ * status → コーディコン＋git色。画像(SVG)アイコンはスクロール描画が重いため、
+ * 軽いフォントグリフ(ThemeIcon)を使う。VS Code が差分表示用に用意した
+ * diff-* 系（git 拡張の SCM と同じ語彙）で「差分の状態」を正確に表す。
+ */
+const STATUS_CODICON: Record<string, { icon: string; color: string }> = {
+  A: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  M: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  D: { icon: 'diff-removed', color: 'gitDecoration.deletedResourceForeground' },
+  R: { icon: 'diff-renamed', color: 'gitDecoration.renamedResourceForeground' },
+  C: { icon: 'diff-added', color: 'gitDecoration.addedResourceForeground' },
+  T: { icon: 'diff-modified', color: 'gitDecoration.modifiedResourceForeground' },
+  U: { icon: 'warning', color: 'gitDecoration.conflictingResourceForeground' },
+};
 
 export type ViewMode = 'list' | 'tree';
 
@@ -70,6 +83,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private mode: ViewMode = 'list';
   private commentsOnly = false;
   private hideViewed = false;
+  /** 「無視」する glob 文字列と、その判定関数（パターンから生成）。 */
+  private ignorePattern = '';
+  private ignoreMatcher: (relPath: string) => boolean = () => false;
   /** refresh ごとに worktree の差分一覧をキャッシュ（dir 展開のたびに git を叩かないため）。 */
   private readonly cache = new Map<string, DiffEntry[]>();
   /** worktree 一覧キャッシュ（softRefresh のたびに git worktree list を叩かない）。 */
@@ -89,17 +105,20 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly commentCountUnder: (dirPath: string) => number,
     /** 拡張のルート uri（status 文字アイコンの解決用）。 */
     private readonly extensionUri: vscode.Uri,
-  ) {}
+    /** 「無視」glob の永続ストア。 */
+    private readonly ignoreStore: IgnoreStore,
+  ) {
+    this.ignorePattern = ignoreStore.get();
+    this.ignoreMatcher = makeIgnoreMatcher(this.ignorePattern);
+  }
 
   /** status 文字アイコン(A/M/D/R…)の uri。viewed はグレーの -dim 版。 */
-  private statusIcon(status: string, viewed: boolean): vscode.Uri {
-    const k = (status || 'M').toLowerCase();
-    const key = STATUS_ICON_KEYS.has(k) ? k : 'm';
-    return vscode.Uri.joinPath(
-      this.extensionUri,
-      'media',
-      'status',
-      `${key}${viewed ? '-dim' : ''}.svg`,
+  private statusIcon(status: string, viewed: boolean): vscode.ThemeIcon {
+    const deco = STATUS_CODICON[(status || 'M').toUpperCase()] ?? STATUS_CODICON.M;
+    // viewed はグレーアウト。それ以外は git の差分色。
+    return new vscode.ThemeIcon(
+      deco.icon,
+      new vscode.ThemeColor(viewed ? 'disabledForeground' : deco.color),
     );
   }
 
@@ -167,6 +186,22 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       this.hideViewed = on;
       this._onDidChangeTreeData.fire();
     }
+  }
+
+  getIgnore(): string {
+    return this.ignorePattern;
+  }
+
+  /** 「無視」する glob（カンマ/改行区切り）を設定。永続化＋再描画する。 */
+  async setIgnore(pattern: string): Promise<void> {
+    const next = pattern.trim();
+    if (next === this.ignorePattern) {
+      return;
+    }
+    this.ignorePattern = next;
+    this.ignoreMatcher = makeIgnoreMatcher(next);
+    await this.ignoreStore.set(next);
+    this._onDidChangeTreeData.fire();
   }
 
   getMode(): ViewMode {
@@ -287,7 +322,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return entries.filter((e) => e.path.startsWith(prefix));
   }
 
-  getTreeItem(node: DiffNode): vscode.TreeItem {
+  getTreeItem(node: DiffNode): vscode.TreeItem | Promise<vscode.TreeItem> {
     if (node.kind === 'worktree') {
       return this.worktreeItem(node);
     }
@@ -342,7 +377,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return item;
   }
 
-  private worktreeItem(node: WorktreeNode): vscode.TreeItem {
+  private async worktreeItem(node: WorktreeNode): Promise<vscode.TreeItem> {
     const item = new vscode.TreeItem(
       worktreeName(node.worktree),
       vscode.TreeItemCollapsibleState.Expanded,
@@ -353,11 +388,25 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     const current = node.worktree.detached
       ? `(detached ${node.worktree.head.slice(0, 7)})`
       : node.worktree.branch ?? '(no branch)';
+    // viewed 進捗「✓済/総数」。総数は無視glob適用後（レビュー対象）。hideViewed で
+    // ファイルがツリーから消えても全体進捗が分かるように worktree 行だけに出す。
+    let progress = '';
+    const entries = (await this.entriesFor(node.worktree)) ?? [];
+    const targets = this.ignorePattern
+      ? entries.filter((e) => !this.ignoreMatcher(e.path))
+      : entries;
+    if (targets.length > 0) {
+      const done = targets.filter((e) =>
+        this.viewed.isViewed(node.worktree.path, e.path),
+      ).length;
+      progress = `  ✓${done}/${targets.length}`;
+    }
     // ラベルは簡潔に「current → target」。詳細(意味)は tooltip。上書きは ★、コメントは 💬N。
     const cc = this.commentCountUnder(node.worktree.path);
     item.description =
       `${current} → ${target}` +
       (overridden ? ' ★' : '') +
+      progress +
       (cc > 0 ? `  💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
     item.tooltip = new vscode.MarkdownString(
@@ -464,7 +513,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
           ? 'コメントなし'
           : this.hideViewed
             ? 'すべて表示済み'
-            : '差分なし';
+            : this.ignorePattern
+              ? '無視パターンで全件非表示'
+              : '差分なし';
       return [{ kind: 'message', label }];
     }
 
@@ -498,6 +549,9 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       return null;
     }
     let v = entries;
+    if (this.ignorePattern) {
+      v = v.filter((e) => !this.ignoreMatcher(e.path));
+    }
     if (this.hideViewed) {
       v = v.filter((e) => !this.viewed.isViewed(worktree.path, e.path));
     }

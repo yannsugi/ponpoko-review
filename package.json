@@ -36,7 +36,7 @@
         "ponpokoReview.outputDir": {
           "type": "string",
           "default": ".ponpoko-review",
-          "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md を書き出す。"
+          "description": "レビューmdの出力先ディレクトリ。相対パスはワークスペースルート基準、絶対パスも可。配下に <worktree名>/review.md（最新）と review-<timestamp>.md（履歴）を書き出す。"
         },
         "ponpokoReview.afterSubmit": {
           "type": "string",
@@ -106,6 +106,26 @@
       {
         "command": "ponpokoReview.addComment",
         "title": "コメントを追加",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.ask",
+        "title": "[ask]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.nits",
+        "title": "[nits]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.must",
+        "title": "[must]",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addComment.memo",
+        "title": "[memo]",
         "category": "ponpoko-review"
       },
       {
@@ -201,6 +221,18 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.editIgnore",
+        "title": "無視するファイル(glob)を編集",
+        "icon": "$(circle-slash)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.clearIgnore",
+        "title": "無視を解除",
+        "icon": "$(close)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.submitWorktree",
         "title": "このworktreeのコメントを書き出す",
         "icon": "$(export)",
@@ -265,6 +297,16 @@
           "command": "ponpokoReview.clear",
           "when": "view == ponpokoReview.diffTree",
           "group": "navigation@5"
+        },
+        {
+          "command": "ponpokoReview.editIgnore",
+          "when": "view == ponpokoReview.diffTree",
+          "group": "navigation@6"
+        },
+        {
+          "command": "ponpokoReview.clearIgnore",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.hasIgnore",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -287,7 +329,23 @@
       "comments/commentThread/context": [
         {
           "command": "ponpokoReview.addComment",
-          "group": "inline"
+          "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.addComment.ask",
+          "group": "inline@1"
+        },
+        {
+          "command": "ponpokoReview.addComment.nits",
+          "group": "inline@2"
+        },
+        {
+          "command": "ponpokoReview.addComment.must",
+          "group": "inline@3"
+        },
+        {
+          "command": "ponpokoReview.addComment.memo",
+          "group": "inline@4"
         }
       ],
       "comments/commentThread/title": [
@@ -324,6 +382,22 @@
       "commandPalette": [
         {
           "command": "ponpokoReview.addComment",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.ask",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.nits",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.must",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.addComment.memo",
           "when": "false"
         },
         {

@@ -8,6 +8,7 @@ import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
+import { IgnoreStore } from './ignore';
 
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -103,6 +104,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const viewed = new ViewedStore(context.workspaceState);
   // worktree ごとの比較先(base)上書きストア
   const baseStore = new WorktreeBaseStore(context.workspaceState);
+  // 「無視」glob ストア（ノイズ非表示）
+  const ignoreStore = new IgnoreStore(context.workspaceState);
 
   // 差分ツリー
   const treeProvider = new DiffTreeProvider(
@@ -112,6 +115,7 @@ export function activate(context: vscode.ExtensionContext): void {
     (fsPath) => store.listFor(fsPath),
     (dirPath) => store.countUnder(dirPath),
     context.extensionUri,
+    ignoreStore,
   );
 
   // ステータスバー: 未提出コメント数。クリックでコメント一覧へ。
@@ -175,10 +179,38 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.hideViewed',
       treeProvider.getHideViewed(),
     );
+  // 「無視」が有効か（ツールバーに解除ボタンを出す when 句用）。
+  const syncIgnore = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.hasIgnore',
+      treeProvider.getIgnore().length > 0,
+    );
   syncViewMode();
   syncCommentsOnly();
   syncHideViewed();
+  syncIgnore();
   context.subscriptions.push(
+    // 無視 glob を編集（VS Code 検索の除外欄と同思想。カンマ/改行区切り）。
+    vscode.commands.registerCommand('ponpokoReview.editIgnore', async () => {
+      const value = await vscode.window.showInputBox({
+        title: 'ponpoko-review: 無視するファイル（ノイズ非表示）',
+        prompt:
+          'glob をカンマ区切りで。スラッシュ無しは全階層のファイル名にマッチ（VS Code 検索の除外欄と同じ）。空にすると解除。',
+        placeHolder: '例: **/Cargo.toml, **/lib.rs, *.lock',
+        value: treeProvider.getIgnore(),
+        ignoreFocusOut: true,
+      });
+      if (value === undefined) {
+        return; // Esc キャンセル
+      }
+      await treeProvider.setIgnore(value);
+      syncIgnore();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.clearIgnore', async () => {
+      await treeProvider.setIgnore('');
+      syncIgnore();
+    }),
     vscode.commands.registerCommand('ponpokoReview.hideViewedOn', () => {
       treeProvider.setHideViewed(true);
       syncHideViewed();
@@ -342,6 +374,19 @@ export function activate(context: vscode.ExtensionContext): void {
         store.addComment(reply);
         onCommentsChanged();
       },
+    ),
+
+    // prefix 付きで追加（[ask]質問 / [nits]任意 / [must]必須 / [memo]メモ・AIへの補足）。
+    // Comments API は入力欄へのテキスト挿入を許さないため、submit 亜種ボタンにする。
+    // prefix はただの本文先頭テキスト（md 出力にそのまま乗る。構造化はしない）。
+    ...(['ask', 'nits', 'must', 'memo'] as const).map((prefix) =>
+      vscode.commands.registerCommand(
+        `ponpokoReview.addComment.${prefix}`,
+        (reply: vscode.CommentReply) => {
+          store.addComment({ ...reply, text: `[${prefix}] ${reply.text}`.trim() });
+          onCommentsChanged();
+        },
+      ),
     ),
 
     // 個別コメントの編集 / 保存 / キャンセル / 削除 / Resolve。

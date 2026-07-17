@@ -19,6 +19,19 @@ export interface WriteResult {
   itemCount: number;
 }
 
+/**
+ * timestamp 付き履歴ファイル名（例: review-20260716-143005.md）。
+ * review.md は毎回上書きされるため、同内容をこの名前でも残して履歴にする。
+ * 「最新」を指す固定パス(review.md)は claude -p や openReview 用に維持する。
+ */
+export function timestampedName(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `review-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+    `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.md`
+  );
+}
+
 /** fsPath が dir 配下かどうか。 */
 export function isUnder(dir: string, fsPath: string): boolean {
   const rel = path.relative(dir, fsPath);
@@ -108,6 +121,18 @@ export async function writeReview(opts: {
     items.sort((a, b) => (a.relpath === b.relpath ? a.line - b.line : a.relpath < b.relpath ? -1 : 1));
 
   const files: string[] = [];
+  // 同一 Submit 内は全ファイル同じ timestamp（1回の書き出し＝1世代）。
+  const stamp = timestampedName(new Date());
+  // review.md（最新・固定パス）と timestamp 付き履歴の二本立てで書く。
+  // files には固定パスだけ入れる（呼び出し側が「最新」として開く）。
+  const writeBoth = async (dir: vscode.Uri, md: string): Promise<void> => {
+    const buf = Buffer.from(md, 'utf8');
+    await vscode.workspace.fs.createDirectory(dir);
+    const file = vscode.Uri.joinPath(dir, 'review.md');
+    await vscode.workspace.fs.writeFile(file, buf);
+    await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(dir, stamp), buf);
+    files.push(file.fsPath);
+  };
 
   if (combined) {
     // 全worktreeを1ファイルにまとめる（<outputRoot>/review.md）。
@@ -117,11 +142,7 @@ export async function writeReview(opts: {
       const base = wt ? resolveBase(wt.path) : resolveBase('');
       sections.push(renderMarkdown(name, base, items));
     }
-    const dir = vscode.Uri.file(outputRoot);
-    const file = vscode.Uri.joinPath(dir, 'review.md');
-    await vscode.workspace.fs.createDirectory(dir);
-    await vscode.workspace.fs.writeFile(file, Buffer.from(sections.join('\n'), 'utf8'));
-    files.push(file.fsPath);
+    await writeBoth(vscode.Uri.file(outputRoot), sections.join('\n'));
     return { files, itemCount };
   }
 
@@ -130,11 +151,7 @@ export async function writeReview(opts: {
     sortItems(items);
     const base = wt ? resolveBase(wt.path) : resolveBase('');
     const md = renderMarkdown(name, base, items);
-    const dir = vscode.Uri.file(path.join(outputRoot, name));
-    const file = vscode.Uri.joinPath(dir, 'review.md');
-    await vscode.workspace.fs.createDirectory(dir);
-    await vscode.workspace.fs.writeFile(file, Buffer.from(md, 'utf8'));
-    files.push(file.fsPath);
+    await writeBoth(vscode.Uri.file(path.join(outputRoot, name)), md);
   }
 
   return { files, itemCount };
