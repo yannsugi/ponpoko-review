@@ -264,6 +264,11 @@
         "command": "ponpokoReview.copyFullPath",
         "title": "絶対パスをコピー",
         "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.undoViewed",
+        "title": "直前の viewed 操作を元に戻す",
+        "category": "ponpoko-review"
       }
     ],
     "menus": {
