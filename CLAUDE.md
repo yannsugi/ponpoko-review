@@ -33,7 +33,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
 - `src/ignore.ts` — 「無視」パターンストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`/.../` 囲みは正規表現（glob と混在可、`splitIgnorePatterns` が `/.../` 内のカンマを保護、`validateIgnorePatterns` で入力時検証）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
 - `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
-- `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
+- `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。ファイル/フォルダ行の右クリック（`view/item/context` 非 inline）: `openFile`（D は base 側仮想doc）/ `copyRelativePath`（worktree ルート基準）/ `copyFullPath`。`resourceUri` は付けない（付けると status コーディコンがファイル種別アイコンに置き換わる）。
 
 ## 守るべき不変条件（罠）
 1. **コメントは必ず right(=file スキームの作業ファイル uri)に付ける**。`commentingRangeProvider` が file スキームだけ許可して担保。left に付けると行番号が base 基準でズレる。

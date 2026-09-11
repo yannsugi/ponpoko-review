@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { listBranches, viewHash, viewHashes, worktreeList, Worktree } from './git';
+import { listBranches, mergeBase, viewHash, viewHashes, worktreeList, Worktree } from './git';
 import { DiffNode, DiffTreeProvider, WorktreeNode, worktreeName } from './diffTree';
-import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
+import { BASE_SCHEME, BaseContentProvider, makeBaseUri } from './baseContentProvider';
 import { openDiff } from './openDiff';
 import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
@@ -329,6 +329,44 @@ export function activate(context: vscode.ExtensionContext): void {
       return openDiff(treeProvider.getBase(node.worktree.path), node);
     }),
 
+    // 右クリック: ファイルを開く（作業ツリーの実ファイル。既定クリックの diff は変えない）。
+    // 削除(D)は右側の実ファイルが無いので base 側（merge-base）の仮想 doc を開く。
+    vscode.commands.registerCommand('ponpokoReview.openFile', async (node: DiffNode) => {
+      if (!node || node.kind !== 'file') {
+        return;
+      }
+      const { worktree, entry } = node;
+      let uri: vscode.Uri;
+      if (entry.status === 'D') {
+        const base = treeProvider.getBase(worktree.path);
+        let ref = base;
+        try {
+          ref = await mergeBase(base, worktree.path);
+        } catch {
+          // merge-base が取れなければ base 先端。
+        }
+        uri = makeBaseUri(ref, worktree.path, entry.oldPath ?? entry.path);
+      } else {
+        uri = vscode.Uri.file(path.join(worktree.path, entry.path));
+      }
+      await vscode.window.showTextDocument(uri, { preview: false });
+    }),
+
+    // 右クリック: パスをコピー。相対は worktree ルート基準（ツリー表示と一致）。
+    // D は作業ツリーに無いがパス文字列としてはそのまま返す。フォルダは relDir。
+    vscode.commands.registerCommand('ponpokoReview.copyRelativePath', (node: DiffNode) => {
+      const rel = nodeRelPath(node);
+      if (rel !== undefined) {
+        return vscode.env.clipboard.writeText(rel);
+      }
+    }),
+    vscode.commands.registerCommand('ponpokoReview.copyFullPath', (node: DiffNode) => {
+      const rel = nodeRelPath(node);
+      if (rel !== undefined && (node.kind === 'file' || node.kind === 'dir')) {
+        return vscode.env.clipboard.writeText(path.join(node.worktree.path, rel));
+      }
+    }),
+
     // コメントへクイックアクセス（QuickPick → diff を開いて該当行へ）。未解決のみ。
     vscode.commands.registerCommand('ponpokoReview.gotoComment', async () => {
       const threads = store
@@ -576,6 +614,20 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
   );
+}
+
+/** ファイル/フォルダ行の worktree ルート基準の相対パス。それ以外のノードは undefined。 */
+function nodeRelPath(node: DiffNode | undefined): string | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.kind === 'file') {
+    return node.entry.path;
+  }
+  if (node.kind === 'dir') {
+    return node.relDir;
+  }
+  return undefined;
 }
 
 export function deactivate(): void {
