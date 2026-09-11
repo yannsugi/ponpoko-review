@@ -9,6 +9,7 @@ import { writeReview } from './markdown';
 import { ViewedSnapshot, ViewedStore, ViewedUndoEntry, ViewedUndoStack } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, validateIgnorePatterns } from './ignore';
+import { MarkStore } from './marks';
 
 export function activate(context: vscode.ExtensionContext): void {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -107,6 +108,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // 「無視」glob ストア（ノイズ非表示）
   const ignoreStore = new IgnoreStore(context.workspaceState);
 
+  // 📌 マーク（<outputDir>/marks.txt。外部エージェントも書ける）
+  const marks = new MarkStore(repoRoot, resolveOutputRoot);
+  context.subscriptions.push(marks);
+
   // 差分ツリー
   const treeProvider = new DiffTreeProvider(
     repoRoot,
@@ -116,6 +121,18 @@ export function activate(context: vscode.ExtensionContext): void {
     (dirPath) => store.countUnder(dirPath),
     context.extensionUri,
     ignoreStore,
+    marks,
+  );
+  // marks.txt の変化（外部追記・自分の書き戻し）→ 再描画のみ。
+  context.subscriptions.push(marks.onDidChange(() => treeProvider.softRefresh()));
+  void marks.start();
+  // 出力先が変わったら marks.txt の場所も変わる → watcher を張り直す。
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('ponpokoReview.outputDir')) {
+        void marks.start();
+      }
+    }),
   );
 
   // ステータスバー: 未提出コメント数。クリックでコメント一覧へ。
@@ -186,10 +203,17 @@ export function activate(context: vscode.ExtensionContext): void {
       'ponpokoReview.hasIgnore',
       treeProvider.getIgnore().length > 0,
     );
+  const syncMarkedOnly = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.markedOnly',
+      treeProvider.getMarkedOnly(),
+    );
   syncViewMode();
   syncCommentsOnly();
   syncHideViewed();
   syncIgnore();
+  syncMarkedOnly();
   context.subscriptions.push(
     // 無視 glob を編集（VS Code 検索の除外欄と同思想。カンマ/改行区切り）。
     vscode.commands.registerCommand('ponpokoReview.editIgnore', async () => {
@@ -242,7 +266,47 @@ export function activate(context: vscode.ExtensionContext): void {
       treeProvider.setCommentsOnly(false);
       syncCommentsOnly();
     }),
+    vscode.commands.registerCommand('ponpokoReview.markedOnlyOn', () => {
+      treeProvider.setMarkedOnly(true);
+      syncMarkedOnly();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.markedOnlyOff', () => {
+      treeProvider.setMarkedOnly(false);
+      syncMarkedOnly();
+    }),
+    // 📌 マークのトグル（ファイル行 inline / フォルダは配下一括）。marks.txt に書き戻す。
+    vscode.commands.registerCommand('ponpokoReview.mark', (node: DiffNode) =>
+      marks.set(nodeAbsPaths(node), true),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.unmark', (node: DiffNode) =>
+      marks.set(nodeAbsPaths(node), false),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.clearMarks', async () => {
+      const n = marks.all().size;
+      if (n === 0) {
+        vscode.window.showInformationMessage('ponpoko-review: マークはありません。');
+        return;
+      }
+      await marks.clear();
+      vscode.window.showInformationMessage(`ponpoko-review: 📌 マーク ${n} 件を解除しました。`);
+    }),
   );
+
+  // ノード（ファイル/フォルダ）が指す作業ツリー上の絶対パス一覧（フォルダは配下差分ファイル）。
+  const nodeAbsPaths = (node: DiffNode | undefined): string[] => {
+    if (!node) {
+      return [];
+    }
+    if (node.kind === 'file') {
+      return [path.join(node.worktree.path, node.entry.path)];
+    }
+    if (node.kind === 'dir') {
+      return treeProvider
+        .filesUnder(node.worktree, node.relDir)
+        .map((f) => path.join(node.worktree.path, f.path));
+    }
+    return [];
+  };
 
   // 1ファイルを viewed にする（現在の差分ハッシュを記録）。
   const markViewed = async (worktree: { path: string }, filePath: string): Promise<void> => {
@@ -392,6 +456,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('ponpokoReview.refresh', () => {
+      void marks.reload(); // watcher を取りこぼしても手動更新で追従できるように
       treeProvider.refresh();
     }),
 
@@ -678,6 +743,7 @@ export function activate(context: vscode.ExtensionContext): void {
         { label: '$(go-to-file) レビュー md (review.md) を開く', cmd: 'ponpokoReview.openReview' },
         { label: '$(folder) 出力先ディレクトリを設定', cmd: 'ponpokoReview.setOutputDir' },
         { label: '$(git-branch) 既定の比較先(base)を選択', cmd: 'ponpokoReview.setBase' },
+        { label: '$(pinned) 📌 マークを全解除 (marks.txt を空にする)', cmd: 'ponpokoReview.clearMarks' },
       ];
       const picked = await vscode.window.showQuickPick(items, {
         placeHolder: 'ponpoko-review',
