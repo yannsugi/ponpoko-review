@@ -6,7 +6,7 @@ import { BASE_SCHEME, BaseContentProvider, makeBaseUri } from './baseContentProv
 import { openDiff } from './openDiff';
 import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
-import { ViewedStore } from './viewed';
+import { ViewedSnapshot, ViewedStore, ViewedUndoEntry, ViewedUndoStack } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, validateIgnorePatterns } from './ignore';
 
@@ -255,10 +255,67 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   };
 
+  // 直前のチェック操作の取り消し（hideViewed 中の誤操作救済）。セッション限り・上限 5 件。
+  const undoStack = new ViewedUndoStack(5);
+  const undoEntry = async (entry: ViewedUndoEntry): Promise<void> => {
+    // 保存していたハッシュをそのまま書き戻す（再ハッシュしないので git を叩かない）。
+    await Promise.all(
+      entry.snapshots.map((sn) =>
+        sn.hash === undefined
+          ? viewed.unsetViewed(sn.worktreePath, sn.file)
+          : viewed.setViewed(sn.worktreePath, sn.file, sn.hash),
+      ),
+    );
+    treeProvider.softRefresh();
+    // どれだったか分かるように、戻したファイルをツリー上で見せる。
+    const first = entry.snapshots[0];
+    const node = treeProvider.fileNodeFor(first.worktreePath, first.file);
+    if (node) {
+      try {
+        await treeView.reveal(node, { select: true, focus: false, expand: false });
+      } catch {
+        // フィルタ等で表示されていない場合は諦める。
+      }
+    }
+    const n = entry.snapshots.length;
+    vscode.window.showInformationMessage(
+      `ponpoko-review: ${n === 1 ? first.file : `${n} 件`} の viewed 操作を元に戻しました。`,
+    );
+  };
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ponpokoReview.undoViewed', async () => {
+      const entry = undoStack.pop();
+      if (!entry) {
+        vscode.window.showInformationMessage('ponpoko-review: 元に戻せる viewed 操作はありません。');
+        return;
+      }
+      await undoEntry(entry);
+    }),
+  );
+
   // チェックボックス操作 → viewed の保存/解除。
   // フォルダをチェックすると配下ファイルを一括 viewed/解除（逆も getTreeItem 側で集計）。
   context.subscriptions.push(
     treeView.onDidChangeCheckboxState(async (e) => {
+      // 適用前の状態をイベント単位でスナップショット（undo 用）。
+      const snapshots: ViewedSnapshot[] = [];
+      let checkedCount = 0;
+      const snap = (wtPath: string, file: string) =>
+        snapshots.push({ worktreePath: wtPath, file, hash: viewed.getHash(wtPath, file) });
+      for (const [node, state] of e.items) {
+        const checked = state === vscode.TreeItemCheckboxState.Checked;
+        if (node.kind === 'file') {
+          snap(node.worktree.path, node.entry.path);
+          checkedCount += checked ? 1 : 0;
+        } else if (node.kind === 'dir') {
+          const files = treeProvider.filesUnder(node.worktree, node.relDir);
+          files.forEach((f) => snap(node.worktree.path, f.path));
+          checkedCount += checked ? files.length : 0;
+        }
+      }
+      const entry: ViewedUndoEntry = { checkedCount, snapshots };
+      undoStack.push(entry);
+
       for (const [node, state] of e.items) {
         const checked = state === vscode.TreeItemCheckboxState.Checked;
         if (node.kind === 'file') {
@@ -290,6 +347,22 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       }
       treeProvider.softRefresh(); // viewed のみ変化 → git再取得せず再描画（ちらつき防止）
+
+      // チェック方向だけトーストで「元に戻す」導線を出す（解除方向はファイルが消えないので不要）。
+      // トーストはこの操作に紐付ける（後続の操作ではなく、この 1 件だけを戻す）。
+      if (checkedCount > 0) {
+        void vscode.window
+          .showInformationMessage(`ponpoko-review: ${checkedCount} 件を viewed にしました`, '元に戻す')
+          .then(async (choice) => {
+            if (choice !== '元に戻す') {
+              return;
+            }
+            const taken = undoStack.take(entry);
+            if (taken) {
+              await undoEntry(taken);
+            }
+          });
+      }
     }),
   );
 

@@ -333,6 +333,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       );
       item.iconPath = vscode.ThemeIcon.Folder;
       item.contextValue = 'ponpoko.dir';
+      item.id = dirId(node.worktree, node.relDir);
       // 配下ファイルが全て viewed ならフォルダも checked。
       const files = this.filesUnder(node.worktree, node.relDir);
       const allViewed =
@@ -409,6 +410,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       progress +
       (cc > 0 ? `  💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
+    item.id = worktreeId(node.worktree);
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
         `current: \`${current}\`  （変更元 / git head）\n\n` +
@@ -450,6 +452,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         (comments.length > 0 ? ` ・ 💬 コメント ${comments.length} 件` : ''),
     );
     item.contextValue = 'ponpoko.file';
+    item.id = fileId(node.worktree, entry.path);
     item.checkboxState = isViewed
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -459,6 +462,47 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       arguments: [node],
     };
     return item;
+  }
+
+  /**
+   * `treeView.reveal` 用の親解決。ノードは都度生成されるので TreeItem.id（安定キー）で同一視される。
+   * tree モードのフォルダは compactDir で畳まれているため、ルートから辿って親フォルダを探す。
+   */
+  async getParent(node: DiffNode): Promise<DiffNode | undefined> {
+    if (node.kind === 'worktree' || node.kind === 'message') {
+      return undefined;
+    }
+    const wtNode: WorktreeNode = { kind: 'worktree', worktree: node.worktree };
+    if (node.kind === 'comment') {
+      const fileNode = await this.resolveFileNode(node.uri);
+      return fileNode ?? undefined;
+    }
+    if (this.mode === 'list') {
+      return node.kind === 'file' ? wtNode : undefined;
+    }
+    const target = node.kind === 'file' ? node.entry.path : node.relDir;
+    const entries = (await this.visibleEntries(node.worktree)) ?? [];
+    // ルートから、target を含むフォルダを一段ずつ降りる。
+    let parent: DiffNode = wtNode;
+    let dir = '';
+    for (;;) {
+      const next = dirChildren(node.worktree, entries, dir).find(
+        (c): c is DirNode =>
+          c.kind === 'dir' && c.relDir !== target && target.startsWith(c.relDir + '/'),
+      );
+      if (!next) {
+        return parent;
+      }
+      parent = next;
+      dir = next.relDir;
+    }
+  }
+
+  /** キャッシュ済み差分から FileNode を組み立てる（reveal 用）。差分に無ければ undefined。 */
+  fileNodeFor(worktreePath: string, file: string): FileNode | undefined {
+    const worktree = this.worktreesCache?.find((w) => w.path === worktreePath);
+    const entry = this.cache.get(worktreePath)?.find((e) => e.path === file);
+    return worktree && entry ? { kind: 'file', worktree, entry } : undefined;
   }
 
   async getChildren(node?: DiffNode): Promise<DiffNode[]> {
@@ -694,4 +738,15 @@ function describe(err: unknown): string {
 export function isUnderDir(dir: string, fsPath: string): boolean {
   const rel = path.relative(dir, fsPath);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/** TreeItem.id（reveal / 展開状態の同一視に使う安定キー）。 */
+function worktreeId(wt: Worktree): string {
+  return `wt:${wt.path}`;
+}
+function dirId(wt: Worktree, relDir: string): string {
+  return `dir:${wt.path}::${relDir}`;
+}
+function fileId(wt: Worktree, file: string): string {
+  return `file:${wt.path}::${file}`;
 }
