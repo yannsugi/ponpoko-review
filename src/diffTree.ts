@@ -315,11 +315,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return entry ? { kind: 'file', worktree: owner, entry } : null;
   }
 
-  /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
+  /**
+   * キャッシュ済み差分から、relDir 配下の「レビュー対象」ファイルを返す（チェック伝播・フォルダ checked 集計用）。
+   * 無視(ignore)パターンに当たるものは対象外にして、worktree 行の「✓済/総数」と基準を揃える。
+   * hideViewed / commentsOnly は表示上の絞り込みなので反映しない（対象の定義を変えるのは ignore だけ）。
+   */
   filesUnder(worktree: Worktree, relDir: string): DiffEntry[] {
     const entries = this.cache.get(worktree.path) ?? [];
     const prefix = relDir + '/';
-    return entries.filter((e) => e.path.startsWith(prefix));
+    return entries.filter(
+      (e) => e.path.startsWith(prefix) && !(this.ignorePattern && this.ignoreMatcher(e.path)),
+    );
   }
 
   getTreeItem(node: DiffNode): vscode.TreeItem | Promise<vscode.TreeItem> {
