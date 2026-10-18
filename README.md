@@ -223,6 +223,8 @@ Service層を経由するように。Handlerから直接Repositoryを叩かな�
 
 ## 開発 / テスト
 
+[![test](https://github.com/yannsugi/ponpoko-review/actions/workflows/test.yml/badge.svg)](https://github.com/yannsugi/ponpoko-review/actions/workflows/test.yml)
+
 - `npm run compile` … TypeScript ビルド（`out/`）。
 - `npm test` … 純粋関数のユニットテスト（`node:test`。git パース / ツリー構築 / 見出し整形など）。
 - `npx vsce package` … vsix 化。
