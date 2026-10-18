@@ -249,6 +249,21 @@
         "title": "このworktreeの比較先(target)を設定",
         "icon": "$(git-branch)",
         "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.openFile",
+        "title": "ファイルを開く",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.copyRelativePath",
+        "title": "相対パスをコピー",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.copyFullPath",
+        "title": "絶対パスをコピー",
+        "category": "ponpoko-review"
       }
     ],
     "menus": {
@@ -324,6 +339,21 @@
           "command": "ponpokoReview.clearWorktree",
           "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
           "group": "inline@2"
+        },
+        {
+          "command": "ponpokoReview.openFile",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.file",
+          "group": "1_open@0"
+        },
+        {
+          "command": "ponpokoReview.copyRelativePath",
+          "when": "view == ponpokoReview.diffTree && (viewItem == ponpoko.file || viewItem == ponpoko.dir)",
+          "group": "2_copy@0"
+        },
+        {
+          "command": "ponpokoReview.copyFullPath",
+          "when": "view == ponpokoReview.diffTree && (viewItem == ponpoko.file || viewItem == ponpoko.dir)",
+          "group": "2_copy@1"
         }
       ],
       "comments/commentThread/context": [
@@ -438,6 +468,18 @@
         },
         {
           "command": "ponpokoReview.setWorktreeBase",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openFile",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.copyRelativePath",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.copyFullPath",
           "when": "false"
         }
       ]
