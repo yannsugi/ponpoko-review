@@ -10,11 +10,17 @@ import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore } from './ignore';
 
-export function activate(context: vscode.ExtensionContext): void {
+/** 拡張の exports（Extension Development Host 上の自動スモークテストから内部を覗く用）。 */
+export interface PonpokoApi {
+  store: CommentStore;
+  treeProvider: DiffTreeProvider;
+}
+
+export function activate(context: vscode.ExtensionContext): PonpokoApi | undefined {
   const repoRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!repoRoot) {
     vscode.window.showWarningMessage('ponpoko-review: ワークスペースが開かれていません。');
-    return;
+    return undefined;
   }
 
   // 出力先（相対はワークスペースルート基準、絶対パスも可）。
@@ -609,6 +615,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
   );
+  return { store, treeProvider };
 }
 
 /**
