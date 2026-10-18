@@ -33,7 +33,8 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - **ファイル全体へのコメント** = `range` 無しスレッド（`SavedThread.line` 省略で永続化、`reanchor` 対象外）。`provideCommentingRanges` は `{ranges, enableFileComments:true}` を返す（VS Code 1.97+）。`addFileComment(uri,text)` はエクスプローラー/エディタタイトル/ツリー右クリックの入口用。`threadLineRange` は range 無しで `undefined`、`listFor` はファイルコメントを先頭に並べる。`filesWithComments(dir)` で差分外ファイルをツリーに合流させる。
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
-- `npm test`（`node --test`、`test/*.test.js`）で純粋関数をテスト。`vscode` は `test/vscode-stub.cjs` で差し替え。VS Code API 依存部分は F5 ＋ `docs/SMOKE_TEST.md` で手確認。
+- `src/ignore.ts` — 「無視」パターンストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`/.../` 囲みは正規表現（glob と混在可、`splitIgnorePatterns` が `/.../` 内のカンマを保護、`validateIgnorePatterns` で入力時検証）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
+- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`、ファイル全体は `path` のみ（行番号・フェンス無し、同一ファイル内で先頭）。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
 ## 守るべき不変条件（罠）
