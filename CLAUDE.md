@@ -11,7 +11,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `npm ci`（再現性。devDependencies は exact 固定・runtime依存は無し）/ 追加時は `npm install --save-exact`
 - `npm run compile`（`tsc -p ./` → `out/`）/ `npm run watch`
 - デバッグ起動: VS Code で `F5`（Extension Development Host）。`.vscode/launch.json` 済み。
-- テストは無し。動作確認は F5 と、純粋関数は `node -e` で `out/*.js` を叩いて確認する。
+- `npm test`（`node:test`、`test/*.test.js`、`vscode` はスタブ）で純粋関数をテスト。UI は F5 で動作確認。
 - パッケージ: `npx vsce package` → `code --install-extension *.vsix`。
 
 ## アーキテクチャ（依存順）
@@ -31,7 +31,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。コメント入力欄に prefix ボタン `[ask][nits][must][memo]`（`addComment.<prefix>` コマンド、submit 亜種。Comments API は入力欄へのテキスト挿入不可のため）。prefix は本文先頭のただのテキストで md 出力にそのまま乗る（構造化しない）。
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
-- `src/ignore.ts` — 「無視」glob ストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
+- `src/ignore.ts` — 「無視」パターンストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`/.../` 囲みは正規表現（glob と混在可、`splitIgnorePatterns` が `/.../` 内のカンマを保護、`validateIgnorePatterns` で入力時検証）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
 - `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
