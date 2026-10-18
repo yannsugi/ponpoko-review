@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import { isUnder } from './paths';
 
 let commentSeq = 0;
 
@@ -305,7 +305,7 @@ export class CommentStore implements vscode.Disposable {
 
   /** 指定 worktree 配下のスレッドだけ返す（md 書き出し用）。 */
   getThreadsUnder(worktreePath: string): vscode.CommentThread[] {
-    return [...this.threads].filter((t) => isUnderPath(worktreePath, t.uri.fsPath));
+    return [...this.threads].filter((t) => isUnder(worktreePath, t.uri.fsPath));
   }
 
   /** 指定ディレクトリ配下の未解決コメント数（フォルダ/worktree 集計用）。 */
@@ -371,7 +371,7 @@ export class CommentStore implements vscode.Disposable {
   clearUnder(worktreePath: string): number {
     let n = 0;
     for (const thread of [...this.threads]) {
-      if (isUnderPath(worktreePath, thread.uri.fsPath)) {
+      if (isUnder(worktreePath, thread.uri.fsPath)) {
         thread.dispose();
         this.threads.delete(thread);
         n++;
@@ -409,12 +409,6 @@ export function isFileThread(thread: vscode.CommentThread): boolean {
 /** 未解決（出力対象）スレッドか。Resolve 済みは false。 */
 function isActive(t: vscode.CommentThread): boolean {
   return t.state !== vscode.CommentThreadState.Resolved;
-}
-
-/** fsPath が dir 配下かどうか。 */
-function isUnderPath(dir: string, fsPath: string): boolean {
-  const rel = path.relative(dir, fsPath);
-  return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 /**

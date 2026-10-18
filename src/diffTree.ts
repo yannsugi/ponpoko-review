@@ -14,6 +14,9 @@ import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, makeIgnoreMatcher } from './ignore';
 import { MarkStore } from './marks';
+import { configuredOutputRoot, isUnder, owningWorktree, owningWorktreePath } from './paths';
+
+export { owningWorktreePath };
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
@@ -119,8 +122,6 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly commentCountUnder: (dirPath: string) => number,
     /** ディレクトリ配下でコメントを持つファイル(fsPath)一覧。差分外ファイルの合流用。 */
     private readonly commentedFilesUnder: (dirPath: string) => string[],
-    /** 拡張のルート uri（status 文字アイコンの解決用）。 */
-    private readonly extensionUri: vscode.Uri,
     /** 「無視」glob の永続ストア。 */
     private readonly ignoreStore: IgnoreStore,
     /** 📌 マーク（marks.txt）ストア。 */
@@ -171,14 +172,10 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       return false; // 自分の出力物 → 無関係
     }
     // キャッシュ済み worktree のうち、保存パスを含む最長一致のものを探す。
-    let owner: string | undefined;
-    for (const wtPath of this.cache.keys()) {
-      if (fsPath === wtPath || isUnderDir(wtPath, fsPath)) {
-        if (!owner || wtPath.length > owner.length) {
-          owner = wtPath;
-        }
-      }
-    }
+    const owner = owningWorktreePath(
+      fsPath,
+      [...this.cache.keys()].map((p) => ({ path: p })),
+    );
     if (owner) {
       this.cache.delete(owner);
       return true;
@@ -256,10 +253,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   /** レビューmdの出力先（絶対パス）。ツリーから除外する自分の成果物の場所。 */
   private outputRoot(): string {
-    const setting = vscode.workspace
-      .getConfiguration('ponpokoReview')
-      .get<string>('outputDir', '.ponpoko-review');
-    return path.isAbsolute(setting) ? setting : path.join(this.repoRoot, setting);
+    return configuredOutputRoot(this.repoRoot);
   }
 
   /** グローバル設定の比較基準ブランチ（既定: main）。 */
@@ -335,15 +329,7 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     } catch {
       return null;
     }
-    let owner: Worktree | undefined;
-    for (const wt of worktrees) {
-      const rel = path.relative(wt.path, uri.fsPath);
-      if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
-        if (!owner || wt.path.length > owner.path.length) {
-          owner = wt;
-        }
-      }
-    }
+    const owner = owningWorktree(uri.fsPath, worktrees);
     if (!owner) {
       return null;
     }
@@ -845,23 +831,9 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** fsPath を含む worktree のパスを最長前方一致で求める（入れ子 worktree 対応）。 */
-export function owningWorktreePath(fsPath: string, worktrees: Worktree[]): string | undefined {
-  let best: string | undefined;
-  for (const wt of worktrees) {
-    if (fsPath === wt.path || isUnderDir(wt.path, fsPath)) {
-      if (!best || wt.path.length > best.length) {
-        best = wt.path;
-      }
-    }
-  }
-  return best;
-}
-
-/** fsPath が dir 配下（dir 自身は除く）かどうか。 */
+/** fsPath が dir 配下（dir 自身は除く）かどうか。paths.isUnder の excludeSelf 版。 */
 export function isUnderDir(dir: string, fsPath: string): boolean {
-  const rel = path.relative(dir, fsPath);
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  return isUnder(dir, fsPath, { excludeSelf: true });
 }
 
 /** TreeItem.id（reveal / 展開状態の同一視に使う安定キー）。 */

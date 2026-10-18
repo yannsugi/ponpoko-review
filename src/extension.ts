@@ -10,6 +10,7 @@ import { ViewedSnapshot, ViewedStore, ViewedUndoEntry, ViewedUndoStack } from '.
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, validateIgnorePatterns } from './ignore';
 import { MarkStore } from './marks';
+import { configuredOutputRoot } from './paths';
 
 /** 拡張の exports（Extension Development Host 上の自動スモークテストから内部を覗く用）。 */
 export interface PonpokoApi {
@@ -25,12 +26,7 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
   }
 
   // 出力先（相対はワークスペースルート基準、絶対パスも可）。
-  const resolveOutputRoot = (): string => {
-    const setting = vscode.workspace
-      .getConfiguration('ponpokoReview')
-      .get<string>('outputDir', '.ponpoko-review');
-    return path.isAbsolute(setting) ? setting : path.join(repoRoot, setting);
-  };
+  const resolveOutputRoot = (): string => configuredOutputRoot(repoRoot);
 
   // コメント群を md に書き出す共通処理。
   const runSubmit = async (
@@ -73,7 +69,7 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       const head =
         `ponpoko-review: ${result.itemCount} 件を ${where} に書き出しました` +
         (resolved > 0 ? `（Resolve済み ${resolved} 件は除外）` : '');
-      // 出力後の扱いは設定 afterSubmit に従う（既定 resolve）。
+      // 出力後の扱いは設定 afterSubmit に従う（既定 clear）。
       const after = vscode.workspace
         .getConfiguration('ponpokoReview')
         .get<string>('afterSubmit', 'clear');
@@ -126,7 +122,6 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
     (fsPath) => store.listFor(fsPath),
     (dirPath) => store.countUnder(dirPath),
     (dirPath) => store.filesWithComments(dirPath),
-    context.extensionUri,
     ignoreStore,
     marks,
   );
@@ -188,9 +183,7 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
   });
   context.subscriptions.push(treeView);
 
-  // 表示モード（list/tree）切替。メニューの when 句用に context key を同期。
-  const syncViewMode = () =>
-    vscode.commands.executeCommand('setContext', 'ponpokoReview.viewMode', treeProvider.getMode());
+  // フィルタ状態をメニューの when 句用 context key に同期。
   const syncCommentsOnly = () =>
     vscode.commands.executeCommand(
       'setContext',
@@ -216,7 +209,6 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       'ponpokoReview.markedOnly',
       treeProvider.getMarkedOnly(),
     );
-  syncViewMode();
   syncCommentsOnly();
   syncHideViewed();
   syncIgnore();
@@ -254,16 +246,13 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
     }),
     vscode.commands.registerCommand('ponpokoReview.viewAsTree', () => {
       treeProvider.setMode('tree');
-      syncViewMode();
     }),
     vscode.commands.registerCommand('ponpokoReview.viewAsList', () => {
       treeProvider.setMode('list');
-      syncViewMode();
     }),
     // 順次切り替え: list → tree → list …
     vscode.commands.registerCommand('ponpokoReview.cycleViewMode', () => {
       treeProvider.setMode(treeProvider.getMode() === 'list' ? 'tree' : 'list');
-      syncViewMode();
     }),
     vscode.commands.registerCommand('ponpokoReview.commentsFilterOn', () => {
       treeProvider.setCommentsOnly(true);
