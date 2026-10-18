@@ -23,6 +23,13 @@ function makeEmptyUri(filePath: string): vscode.Uri {
 export async function openDiff(base: string, node: FileNode): Promise<void> {
   const { worktree, entry } = node;
   const cwd = worktree.path;
+  // 差分なし（ファイルコメントだけで現れたファイル）: 同一内容の diff は無意味なので実ファイルを開く。
+  if (entry.status === 'none') {
+    await vscode.window.showTextDocument(vscode.Uri.file(path.join(cwd, entry.path)), {
+      preview: true,
+    });
+    return;
+  }
   // base 側で参照すべきパス（リネーム時は旧パス）。
   const basePath = entry.oldPath ?? entry.path;
   const workingUri = vscode.Uri.file(path.join(cwd, entry.path));

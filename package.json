@@ -11,7 +11,7 @@
     "url": "https://github.com/yannsugi/ponpoko-review.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
@@ -249,6 +249,61 @@
         "title": "このworktreeの比較先(target)を設定",
         "icon": "$(git-branch)",
         "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addFileComment",
+        "title": "このファイルにコメント（ファイル全体）",
+        "icon": "$(comment)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.openFile",
+        "title": "ファイルを開く",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.copyRelativePath",
+        "title": "相対パスをコピー",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.copyFullPath",
+        "title": "絶対パスをコピー",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.undoViewed",
+        "title": "直前の viewed 操作を元に戻す",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.markedOnlyOn",
+        "title": "📌 マーク済みのファイルだけ表示",
+        "icon": "$(pin)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.markedOnlyOff",
+        "title": "📌 マーク絞り込みを解除",
+        "icon": "$(pinned)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.mark",
+        "title": "📌 マークする",
+        "icon": "$(pin)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.unmark",
+        "title": "📌 マークを外す",
+        "icon": "$(pinned)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.clearMarks",
+        "title": "📌 マークを全解除 (marks.txt を空にする)",
+        "category": "ponpoko-review"
       }
     ],
     "menus": {
@@ -276,6 +331,16 @@
         {
           "command": "ponpokoReview.commentsFilterOff",
           "when": "view == ponpokoReview.diffTree && ponpokoReview.commentsOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.markedOnlyOn",
+          "when": "view == ponpokoReview.diffTree && !ponpokoReview.markedOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.markedOnlyOff",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.markedOnly",
           "group": "navigation@1"
         },
         {
@@ -324,6 +389,36 @@
           "command": "ponpokoReview.clearWorktree",
           "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
           "group": "inline@2"
+        },
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.file/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "ponpokoReview.mark",
+          "when": "view == ponpokoReview.diffTree && (viewItem == ponpoko.file || viewItem == ponpoko.dir)",
+          "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.unmark",
+          "when": "view == ponpokoReview.diffTree && (viewItem == ponpoko.file.marked || viewItem == ponpoko.dir.marked)",
+          "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.openFile",
+          "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.file/",
+          "group": "1_open@0"
+        },
+        {
+          "command": "ponpokoReview.copyRelativePath",
+          "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.(file|dir)/",
+          "group": "2_copy@0"
+        },
+        {
+          "command": "ponpokoReview.copyFullPath",
+          "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.(file|dir)/",
+          "group": "2_copy@1"
         }
       ],
       "comments/commentThread/context": [
@@ -439,6 +534,40 @@
         {
           "command": "ponpokoReview.setWorktreeBase",
           "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openFile",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.copyRelativePath",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.copyFullPath",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.mark",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.unmark",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "group": "ponpokoReview@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "resourceScheme == file",
+          "group": "ponpokoReview@1"
         }
       ]
     }
@@ -451,7 +580,7 @@
   },
   "devDependencies": {
     "@types/node": "20.19.43",
-    "@types/vscode": "1.90.0",
+    "@types/vscode": "1.97.0",
     "@vscode/vsce": "3.9.2",
     "typescript": "5.9.3"
   }

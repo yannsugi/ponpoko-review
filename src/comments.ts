@@ -31,7 +31,8 @@ class ReviewComment implements vscode.Comment {
  */
 interface SavedThread {
   uri: string;
-  line: number;
+  /** 開始行(0-based)。ファイル全体へのコメント（range 無し）は undefined。 */
+  line?: number;
   /** 範囲コメントの終端行(0-based, 生の range.end.line)。単一行は省略可。 */
   endLine?: number;
   /** アンカー行（開始行）のテキスト(trim済)。再アンカー(行ズレ追従)用。 */
@@ -55,13 +56,14 @@ export class CommentStore implements vscode.Disposable {
       'ponpoko-review',
     );
     this.controller.commentingRangeProvider = {
-      provideCommentingRanges: (document) => {
+      provideCommentingRanges: (document): vscode.CommentingRanges => {
         // 右(作業ツリーの実ファイル=file スキーム)だけコメント可能にする。
+        // 行コメントに加えて、ファイル全体へのコメント（range 無し）も許可する。
         if (document.uri.scheme !== 'file') {
-          return [];
+          return { ranges: [], enableFileComments: false };
         }
         const last = Math.max(document.lineCount - 1, 0);
-        return [new vscode.Range(0, 0, last, 0)];
+        return { ranges: [new vscode.Range(0, 0, last, 0)], enableFileComments: true };
       },
     };
     this.restore();
@@ -74,8 +76,10 @@ export class CommentStore implements vscode.Disposable {
       if (!s.uri || !s.comments?.length) {
         continue;
       }
-      const range = new vscode.Range(s.line, 0, s.endLine ?? s.line, 0);
-      const thread = this.controller.createCommentThread(vscode.Uri.parse(s.uri), range, []);
+      // line 無し＝ファイル全体へのコメント（range 無しで復元）。
+      const range =
+        s.line === undefined ? undefined : new vscode.Range(s.line, 0, s.endLine ?? s.line, 0);
+      const thread = this.createThread(vscode.Uri.parse(s.uri), range);
       thread.comments = s.comments.map((t) => new ReviewComment(t, thread));
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
       thread.state = s.resolved
@@ -86,6 +90,15 @@ export class CommentStore implements vscode.Disposable {
       }
       this.threads.add(thread);
     }
+  }
+
+  /**
+   * スレッドを作る。range 無しはファイル全体へのコメント。
+   * （型定義上 createCommentThread の range は Range だが、実行時は undefined を受け付け、
+   *   CommentThread.range も `Range | undefined`。）
+   */
+  private createThread(uri: vscode.Uri, range: vscode.Range | undefined): vscode.CommentThread {
+    return this.controller.createCommentThread(uri, range as vscode.Range, []);
   }
 
   /**
@@ -151,8 +164,8 @@ export class CommentStore implements vscode.Disposable {
       }
       saved.push({
         uri: t.uri.toString(),
-        line: t.range?.start.line ?? 0,
-        endLine: t.range?.end.line ?? t.range?.start.line ?? 0,
+        line: t.range?.start.line,
+        endLine: t.range?.end.line,
         anchor: this.anchors.get(t),
         comments: t.comments.map((c) =>
           typeof c.body === 'string' ? c.body : c.body.value,
@@ -175,6 +188,23 @@ export class CommentStore implements vscode.Disposable {
         this.anchors.set(thread, a);
       }
     }
+    this.threads.add(thread);
+    this.persist();
+  }
+
+  /**
+   * ファイル全体へのコメント（range 無しスレッド）を追加する。
+   * 差分の有無を問わず、作業ツリーの実ファイル(file スキーム)に付ける（不変条件 1）。
+   */
+  addFileComment(uri: vscode.Uri, text: string): void {
+    const body = text.trim();
+    if (!body || uri.scheme !== 'file') {
+      return;
+    }
+    const thread = this.createThread(uri, undefined);
+    thread.comments = [new ReviewComment(body, thread)];
+    thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+    thread.state = vscode.CommentThreadState.Unresolved;
     this.threads.add(thread);
     this.persist();
   }
@@ -293,22 +323,39 @@ export class CommentStore implements vscode.Disposable {
     return [...this.threads].filter(isActive).length;
   }
 
-  /** 指定ファイル(uri.fsPath)の未解決コメント一覧（行範囲＋本文＋行ズレ）。行順。 */
-  listFor(fsPath: string): { line: number; endLine: number; text: string; drifted: boolean }[] {
-    const res: { line: number; endLine: number; text: string; drifted: boolean }[] = [];
+  /**
+   * 指定ファイル(uri.fsPath)の未解決コメント一覧（行範囲＋本文＋行ズレ）。
+   * ファイル全体へのコメント（line 無し）を先頭に、以降は行順。
+   */
+  listFor(fsPath: string): CommentEntry[] {
+    const res: CommentEntry[] = [];
     for (const t of this.threads) {
       if (t.uri.fsPath === fsPath && t.comments.length > 0 && isActive(t)) {
         const r = threadLineRange(t);
         res.push({
-          line: r.start,
-          endLine: r.end,
+          line: r?.start,
+          endLine: r?.end,
           text: threadText(t),
           drifted: t.label === DRIFT_LABEL,
         });
       }
     }
-    res.sort((a, b) => a.line - b.line);
+    res.sort((a, b) => (a.line ?? -1) - (b.line ?? -1));
     return res;
+  }
+
+  /**
+   * 指定ディレクトリ配下で未解決コメントを持つファイルの fsPath 一覧（重複なし）。
+   * 差分に無いファイルをツリーに合流させるために使う。
+   */
+  filesWithComments(dirPath: string): string[] {
+    const set = new Set<string>();
+    for (const t of this.getThreadsUnder(dirPath)) {
+      if (t.comments.length > 0 && isActive(t)) {
+        set.add(t.uri.fsPath);
+      }
+    }
+    return [...set];
   }
 
   /** 全スレッドを破棄する（Clear）。永続化もクリア。 */
@@ -346,6 +393,19 @@ export class CommentStore implements vscode.Disposable {
   }
 }
 
+/** ツリー表示用のコメント要約。line/endLine 無し＝ファイル全体へのコメント。 */
+export interface CommentEntry {
+  line?: number;
+  endLine?: number;
+  text: string;
+  drifted: boolean;
+}
+
+/** ファイル全体へのコメント（range 無しスレッド）か。 */
+export function isFileThread(thread: vscode.CommentThread): boolean {
+  return !thread.range;
+}
+
 /** 未解決（出力対象）スレッドか。Resolve 済みは false。 */
 function isActive(t: vscode.CommentThread): boolean {
   return t.state !== vscode.CommentThreadState.Resolved;
@@ -358,13 +418,15 @@ function isUnderPath(dir: string, fsPath: string): boolean {
 }
 
 /**
- * スレッドの行範囲(0-based, end は含む行)を返す。
+ * スレッドの行範囲(0-based, end は含む行)を返す。ファイル全体へのコメント（range 無し）は undefined。
  * 複数行選択で終端が次行頭(character 0)になっている場合は1行戻して、見た目の選択行に合わせる。
  */
-export function threadLineRange(thread: vscode.CommentThread): { start: number; end: number } {
+export function threadLineRange(
+  thread: vscode.CommentThread,
+): { start: number; end: number } | undefined {
   const r = thread.range;
   if (!r) {
-    return { start: 0, end: 0 };
+    return undefined;
   }
   let end = r.end.line;
   if (end > r.start.line && r.end.character === 0) {

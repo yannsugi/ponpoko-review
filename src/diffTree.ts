@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import {
   DiffEntry,
+  FileStatus,
   Worktree,
   defaultBaseBranch,
   diffNameStatus,
@@ -12,6 +13,7 @@ import {
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, makeIgnoreMatcher } from './ignore';
+import { MarkStore } from './marks';
 
 /** worktree のパスから表示用の名前（ベース名）を得る。 */
 export function worktreeName(wt: Worktree): string {
@@ -49,15 +51,25 @@ export interface DirNode {
   label: string;
 }
 
+/**
+ * ツリーに並ぶファイル。差分の DiffEntry に加えて、差分は無いがコメントが付いたファイルを
+ * status 'none' で表す（コメントが付いたときだけツリーに現れる。全ファイルは並べない）。
+ */
+export interface TreeEntry {
+  status: FileStatus | 'none';
+  path: string;
+  oldPath?: string;
+}
+
 export interface FileNode {
   kind: 'file';
   worktree: Worktree;
-  entry: DiffEntry;
+  entry: TreeEntry;
 }
 
 export interface CommentInfo {
-  line: number; // 0-based 開始行
-  endLine: number; // 0-based 終了行
+  line?: number; // 0-based 開始行。ファイル全体へのコメントは undefined
+  endLine?: number; // 0-based 終了行
   text: string;
   drifted?: boolean; // 保存位置から行がズレている可能性
 }
@@ -83,6 +95,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private mode: ViewMode = 'list';
   private commentsOnly = false;
   private hideViewed = false;
+  /** 📌 マーク済みのファイルだけ表示（他フィルタと直交）。 */
+  private markedOnly = false;
   /** 「無視」する glob 文字列と、その判定関数（パターンから生成）。 */
   private ignorePattern = '';
   private ignoreMatcher: (relPath: string) => boolean = () => false;
@@ -103,10 +117,14 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     private readonly commentsOf: (fsPath: string) => CommentInfo[],
     /** ディレクトリ配下のコメント数（フォルダ/worktree 集計用）。 */
     private readonly commentCountUnder: (dirPath: string) => number,
+    /** ディレクトリ配下でコメントを持つファイル(fsPath)一覧。差分外ファイルの合流用。 */
+    private readonly commentedFilesUnder: (dirPath: string) => string[],
     /** 拡張のルート uri（status 文字アイコンの解決用）。 */
     private readonly extensionUri: vscode.Uri,
     /** 「無視」glob の永続ストア。 */
     private readonly ignoreStore: IgnoreStore,
+    /** 📌 マーク（marks.txt）ストア。 */
+    private readonly marks: MarkStore,
   ) {
     this.ignorePattern = ignoreStore.get();
     this.ignoreMatcher = makeIgnoreMatcher(this.ignorePattern);
@@ -114,6 +132,10 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 
   /** status 文字アイコン(A/M/D/R…)の uri。viewed はグレーの -dim 版。 */
   private statusIcon(status: string, viewed: boolean): vscode.ThemeIcon {
+    if (status === 'none') {
+      // 差分なし（ファイルコメントだけで現れたファイル）: status 色は付けずコメント系アイコン。
+      return new vscode.ThemeIcon('comment');
+    }
     const deco = STATUS_CODICON[(status || 'M').toUpperCase()] ?? STATUS_CODICON.M;
     // viewed はグレーアウト。それ以外は git の差分色。
     return new vscode.ThemeIcon(
@@ -186,6 +208,23 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       this.hideViewed = on;
       this._onDidChangeTreeData.fire();
     }
+  }
+
+  getMarkedOnly(): boolean {
+    return this.markedOnly;
+  }
+
+  /** 📌 マーク済みのファイルだけ表示（list/tree・commentsOnly・hideViewed と直交）。 */
+  setMarkedOnly(on: boolean): void {
+    if (this.markedOnly !== on) {
+      this.markedOnly = on;
+      this._onDidChangeTreeData.fire();
+    }
+  }
+
+  /** そのファイル（worktree 相対）が 📌 マーク済みか。 */
+  isMarked(worktree: Worktree, relPath: string): boolean {
+    return this.marks.isMarked(path.join(worktree.path, relPath));
   }
 
   getIgnore(): string {
@@ -312,14 +351,27 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       this.cache.get(owner.path) ?? (await this.entriesFor(owner)) ?? [];
     const rel = path.relative(owner.path, uri.fsPath).split(path.sep).join('/');
     const entry = entries.find((e) => e.path === rel);
-    return entry ? { kind: 'file', worktree: owner, entry } : null;
+    if (entry) {
+      return { kind: 'file', worktree: owner, entry };
+    }
+    // 差分に無いがコメントが付いたファイル。
+    if (this.commentsOf(uri.fsPath).length > 0) {
+      return { kind: 'file', worktree: owner, entry: { status: 'none', path: rel } };
+    }
+    return null;
   }
 
-  /** キャッシュ済み差分から、relDir 配下の全ファイルを返す（チェック伝播用）。 */
+  /**
+   * キャッシュ済み差分から、relDir 配下の「レビュー対象」ファイルを返す（チェック伝播・フォルダ checked 集計用）。
+   * 無視(ignore)パターンに当たるものは対象外にして、worktree 行の「✓済/総数」と基準を揃える。
+   * hideViewed / commentsOnly は表示上の絞り込みなので反映しない（対象の定義を変えるのは ignore だけ）。
+   */
   filesUnder(worktree: Worktree, relDir: string): DiffEntry[] {
     const entries = this.cache.get(worktree.path) ?? [];
     const prefix = relDir + '/';
-    return entries.filter((e) => e.path.startsWith(prefix));
+    return entries.filter(
+      (e) => e.path.startsWith(prefix) && !(this.ignorePattern && this.ignoreMatcher(e.path)),
+    );
   }
 
   getTreeItem(node: DiffNode): vscode.TreeItem | Promise<vscode.TreeItem> {
@@ -332,9 +384,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         vscode.TreeItemCollapsibleState.Expanded,
       );
       item.iconPath = vscode.ThemeIcon.Folder;
-      item.contextValue = 'ponpoko.dir';
-      // 配下ファイルが全て viewed ならフォルダも checked。
+      item.id = dirId(node.worktree, node.relDir);
       const files = this.filesUnder(node.worktree, node.relDir);
+      // 配下ファイルが全て 📌 ならフォルダも marked 扱い（inline のトグルが「解除」になる）。
+      const allMarked =
+        files.length > 0 && files.every((e) => this.isMarked(node.worktree, e.path));
+      item.contextValue = allMarked ? 'ponpoko.dir.marked' : 'ponpoko.dir';
+      // 配下ファイルが全て viewed ならフォルダも checked。
       const allViewed =
         files.length > 0 &&
         files.every((e) => this.viewed.isViewed(node.worktree.path, e.path));
@@ -357,13 +413,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private commentItem(node: CommentNode): vscode.TreeItem {
     const { info } = node;
     const ref =
-      info.endLine > info.line ? `${info.line + 1}-${info.endLine + 1}` : `${info.line + 1}`;
+      info.line === undefined
+        ? 'ファイル全体'
+        : (info.endLine ?? info.line) > info.line
+          ? `:${info.line + 1}-${info.endLine! + 1}`
+          : `:${info.line + 1}`;
     const first = info.text.split('\n')[0] || '(空コメント)';
     const item = new vscode.TreeItem(
       (info.drifted ? '⚠ ' : '') + first,
       vscode.TreeItemCollapsibleState.None,
     );
-    item.description = `:${ref}`;
+    item.description = ref;
     item.iconPath = new vscode.ThemeIcon(info.drifted ? 'warning' : 'comment');
     item.tooltip = new vscode.MarkdownString(
       (info.drifted ? '⚠ 行がずれている可能性があります\n\n' : '') + info.text,
@@ -401,14 +461,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       ).length;
       progress = `  ✓${done}/${targets.length}`;
     }
+    const marked = targets.filter((e) => this.isMarked(node.worktree, e.path)).length;
     // ラベルは簡潔に「current → target」。詳細(意味)は tooltip。上書きは ★、コメントは 💬N。
     const cc = this.commentCountUnder(node.worktree.path);
     item.description =
       `${current} → ${target}` +
       (overridden ? ' ★' : '') +
       progress +
+      (marked > 0 ? `  📌${marked}` : '') +
       (cc > 0 ? `  💬${cc}` : '');
     item.iconPath = new vscode.ThemeIcon('repo');
+    item.id = worktreeId(node.worktree);
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
         `current: \`${current}\`  （変更元 / git head）\n\n` +
@@ -432,11 +495,16 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
-    const isViewed = this.viewed.isViewed(node.worktree.path, entry.path);
+    const noDiff = entry.status === 'none';
+    const isViewed = !noDiff && this.viewed.isViewed(node.worktree.path, entry.path);
+    const isMarked = this.isMarked(node.worktree, entry.path);
     // status を表す文字アイコン(A/M/D/R…)。viewed はグレー。
     item.iconPath = this.statusIcon(entry.status, isViewed);
-    // description はコメント💬とリネーム元のみ。
+    // description は 📌 マーク・コメント💬・リネーム元のみ。
     const parts: string[] = [];
+    if (isMarked) {
+      parts.push('📌');
+    }
     if (comments.length > 0) {
       parts.push(`💬${comments.length}`);
     }
@@ -446,19 +514,65 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     item.description = parts.join('  ');
     item.tooltip = new vscode.MarkdownString(
       `${entry.oldPath ? `${entry.oldPath} → ` : ''}${entry.path}\n\n` +
-        `status: \`${entry.status}\`` +
+        (noDiff ? '差分なし（ファイルコメントのみ）' : `status: \`${entry.status}\``) +
+        (isMarked ? ' ・ 📌 マーク済み' : '') +
         (comments.length > 0 ? ` ・ 💬 コメント ${comments.length} 件` : ''),
     );
-    item.contextValue = 'ponpoko.file';
-    item.checkboxState = isViewed
-      ? vscode.TreeItemCheckboxState.Checked
-      : vscode.TreeItemCheckboxState.Unchecked;
+    item.contextValue = isMarked ? 'ponpoko.file.marked' : 'ponpoko.file';
+    item.id = fileId(node.worktree, entry.path);
+    // 差分の無いファイルはレビュー対象ではないので viewed チェックボックスを出さない。
+    if (!noDiff) {
+      item.checkboxState = isViewed
+        ? vscode.TreeItemCheckboxState.Checked
+        : vscode.TreeItemCheckboxState.Unchecked;
+    }
     item.command = {
       command: 'ponpokoReview.openDiff',
       title: 'Open Diff',
       arguments: [node],
     };
     return item;
+  }
+
+  /**
+   * `treeView.reveal` 用の親解決。ノードは都度生成されるので TreeItem.id（安定キー）で同一視される。
+   * tree モードのフォルダは compactDir で畳まれているため、ルートから辿って親フォルダを探す。
+   */
+  async getParent(node: DiffNode): Promise<DiffNode | undefined> {
+    if (node.kind === 'worktree' || node.kind === 'message') {
+      return undefined;
+    }
+    const wtNode: WorktreeNode = { kind: 'worktree', worktree: node.worktree };
+    if (node.kind === 'comment') {
+      const fileNode = await this.resolveFileNode(node.uri);
+      return fileNode ?? undefined;
+    }
+    if (this.mode === 'list') {
+      return node.kind === 'file' ? wtNode : undefined;
+    }
+    const target = node.kind === 'file' ? node.entry.path : node.relDir;
+    const entries = (await this.visibleEntries(node.worktree)) ?? [];
+    // ルートから、target を含むフォルダを一段ずつ降りる。
+    let parent: DiffNode = wtNode;
+    let dir = '';
+    for (;;) {
+      const next = dirChildren(node.worktree, entries, dir).find(
+        (c): c is DirNode =>
+          c.kind === 'dir' && c.relDir !== target && target.startsWith(c.relDir + '/'),
+      );
+      if (!next) {
+        return parent;
+      }
+      parent = next;
+      dir = next.relDir;
+    }
+  }
+
+  /** キャッシュ済み差分から FileNode を組み立てる（reveal 用）。差分に無ければ undefined。 */
+  fileNodeFor(worktreePath: string, file: string): FileNode | undefined {
+    const worktree = this.worktreesCache?.find((w) => w.path === worktreePath);
+    const entry = this.cache.get(worktreePath)?.find((e) => e.path === file);
+    return worktree && entry ? { kind: 'file', worktree, entry } : undefined;
   }
 
   async getChildren(node?: DiffNode): Promise<DiffNode[]> {
@@ -511,11 +625,13 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
         ? '差分なし'
         : this.commentsOnly
           ? 'コメントなし'
-          : this.hideViewed
-            ? 'すべて表示済み'
-            : this.ignorePattern
-              ? '無視パターンで全件非表示'
-              : '差分なし';
+          : this.markedOnly
+            ? 'マークなし'
+            : this.hideViewed
+              ? 'すべて表示済み'
+              : this.ignorePattern
+                ? '無視パターンで全件非表示'
+                : '差分なし';
       return [{ kind: 'message', label }];
     }
 
@@ -542,13 +658,16 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     return [];
   }
 
-  /** 表示対象の差分一覧。hideViewed / commentsOnly フィルタを適用。 */
-  private async visibleEntries(worktree: Worktree): Promise<DiffEntry[] | null> {
+  /**
+   * 表示対象の一覧。差分に ignore / hideViewed / commentsOnly / markedOnly フィルタを適用し、
+   * 差分には無いがコメントを持つファイル（status 'none'）を合流させる。
+   */
+  private async visibleEntries(worktree: Worktree): Promise<TreeEntry[] | null> {
     const entries = await this.entriesFor(worktree);
     if (entries === null) {
       return null;
     }
-    let v = entries;
+    let v: TreeEntry[] = entries;
     if (this.ignorePattern) {
       v = v.filter((e) => !this.ignoreMatcher(e.path));
     }
@@ -558,7 +677,43 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
     if (this.commentsOnly) {
       v = v.filter((e) => this.commentsOf(path.join(worktree.path, e.path)).length > 0);
     }
-    return v;
+    if (this.markedOnly) {
+      v = v.filter((e) => this.isMarked(worktree, e.path));
+    }
+    return [...v, ...this.commentedExtras(worktree, entries)];
+  }
+
+  /**
+   * 差分に無いがコメントの付いたファイルを status 'none' の TreeEntry にして返す。
+   * コメントが付いたときだけツリーに出す（引き算: ファイルブラウザにはしない）。
+   * 無視パターン・📌 絞り込みは表示の絞り込みなので同様に適用する。
+   */
+  private commentedExtras(worktree: Worktree, entries: DiffEntry[]): TreeEntry[] {
+    const inDiff = new Set(entries.map((e) => e.path));
+    const out = this.outputRoot();
+    const worktrees = this.worktreesCache ?? [worktree];
+    const extras: TreeEntry[] = [];
+    for (const fsPath of this.commentedFilesUnder(worktree.path)) {
+      // 入れ子 worktree 配下のファイルはその worktree のもの（最長一致）。
+      if (owningWorktreePath(fsPath, worktrees) !== worktree.path) {
+        continue;
+      }
+      if (isUnderDir(out, fsPath)) {
+        continue;
+      }
+      const rel = path.relative(worktree.path, fsPath).split(path.sep).join('/');
+      if (!rel || inDiff.has(rel)) {
+        continue;
+      }
+      if (this.ignorePattern && this.ignoreMatcher(rel)) {
+        continue;
+      }
+      if (this.markedOnly && !this.isMarked(worktree, rel)) {
+        continue;
+      }
+      extras.push({ status: 'none', path: rel });
+    }
+    return extras;
   }
 
   /** worktree の差分一覧を取得（キャッシュ）。失敗時は null。viewed の再検証もここで一度だけ。 */
@@ -620,12 +775,12 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
 /** dir 直下の子（サブディレクトリ＋ファイル）を返す。単一子フォルダは圧縮する。 */
 export function dirChildren(
   worktree: Worktree,
-  entries: DiffEntry[],
+  entries: TreeEntry[],
   dir: string,
 ): DiffNode[] {
   const prefix = dir === '' ? '' : dir + '/';
   const subdirs = new Set<string>();
-  const files: DiffEntry[] = [];
+  const files: TreeEntry[] = [];
   for (const e of entries) {
     if (prefix && !e.path.startsWith(prefix)) {
       continue;
@@ -660,7 +815,7 @@ export function dirChildren(
 }
 
 /** ディレクトリ直下がサブフォルダ1つだけ（ファイル無し）なら下まで連結（src/handlers のように圧縮）。 */
-export function compactDir(entries: DiffEntry[], dir: string): string {
+export function compactDir(entries: TreeEntry[], dir: string): string {
   let cur = dir;
   for (;;) {
     const prefix = cur + '/';
@@ -690,8 +845,32 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** fsPath を含む worktree のパスを最長前方一致で求める（入れ子 worktree 対応）。 */
+export function owningWorktreePath(fsPath: string, worktrees: Worktree[]): string | undefined {
+  let best: string | undefined;
+  for (const wt of worktrees) {
+    if (fsPath === wt.path || isUnderDir(wt.path, fsPath)) {
+      if (!best || wt.path.length > best.length) {
+        best = wt.path;
+      }
+    }
+  }
+  return best;
+}
+
 /** fsPath が dir 配下（dir 自身は除く）かどうか。 */
 export function isUnderDir(dir: string, fsPath: string): boolean {
   const rel = path.relative(dir, fsPath);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/** TreeItem.id（reveal / 展開状態の同一視に使う安定キー）。 */
+function worktreeId(wt: Worktree): string {
+  return `wt:${wt.path}`;
+}
+function dirId(wt: Worktree, relDir: string): string {
+  return `dir:${wt.path}::${relDir}`;
+}
+function fileId(wt: Worktree, file: string): string {
+  return `file:${wt.path}::${file}`;
 }
