@@ -8,7 +8,7 @@ import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
 import { ViewedStore } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
-import { IgnoreStore } from './ignore';
+import { IgnoreStore, validateIgnorePatterns } from './ignore';
 
 /** 拡張の exports（Extension Development Host 上の自動スモークテストから内部を覗く用）。 */
 export interface PonpokoApi {
@@ -203,10 +203,12 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       const value = await vscode.window.showInputBox({
         title: 'ponpoko-review: 無視するファイル（ノイズ非表示）',
         prompt:
-          'glob をカンマ区切りで。スラッシュ無しは全階層のファイル名にマッチ（VS Code 検索の除外欄と同じ）。空にすると解除。',
-        placeHolder: '例: **/Cargo.toml, **/lib.rs, *.lock',
+          'glob をカンマ区切りで。スラッシュ無しは全階層のファイル名にマッチ（VS Code 検索の除外欄と同じ）。/.../ で囲むと正規表現（混在可）。空にすると解除。',
+        placeHolder: '例: **/Cargo.toml, *.lock, /^dist\\//, /\\.(snap|lock)$/',
         value: treeProvider.getIgnore(),
         ignoreFocusOut: true,
+        // 不正な正規表現は入力時に弾く（保存して落ちないように）。
+        validateInput: (v) => validateIgnorePatterns(v),
       });
       if (value === undefined) {
         return; // Esc キャンセル

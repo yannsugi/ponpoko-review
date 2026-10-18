@@ -20,21 +20,94 @@ export class IgnoreStore {
 }
 
 /**
- * glob 文字列（カンマ/改行区切り）→ 相対パス判定関数。空なら常に false。
- * VS Code 検索の除外欄に倣う:
+ * パターン文字列（カンマ/改行区切り）を個々のパターンに分割する。
+ * `/.../` で囲まれた正規表現の中のカンマは区切りとして扱わない
+ * （分割前に `/.../` を保護する）。空要素は捨てる。
+ */
+export function splitIgnorePatterns(patterns: string): string[] {
+  const out: string[] = [];
+  let buf = '';
+  let inRegex = false;
+  const flush = () => {
+    const t = buf.trim();
+    if (t.length > 0) {
+      out.push(t);
+    }
+    buf = '';
+  };
+  for (const c of patterns) {
+    if (!inRegex && (c === ',' || c === '\n')) {
+      flush();
+      continue;
+    }
+    if (c === '/') {
+      if (!inRegex && buf.trim() === '') {
+        inRegex = true; // 要素の先頭 `/` → 正規表現開始
+      } else if (inRegex) {
+        inRegex = false; // 閉じ `/`（以降は区切りが効く。`/a/b/` は glob として後段で判定）
+      }
+    }
+    buf += c;
+  }
+  flush();
+  return out;
+}
+
+/** `/.../` 囲みなら中身を返す。囲みでなければ undefined（`/` 単独や `/dir/x` は glob）。 */
+function regexBody(pattern: string): string | undefined {
+  if (pattern.length >= 2 && pattern.startsWith('/') && pattern.endsWith('/')) {
+    return pattern.slice(1, -1);
+  }
+  return undefined;
+}
+
+/** 1つのパターンを RegExp に変換する。正規表現が不正なら undefined。 */
+function patternToRegExp(pattern: string): RegExp | undefined {
+  const body = regexBody(pattern);
+  if (body === undefined) {
+    return globToRegExp(pattern);
+  }
+  try {
+    return new RegExp(body);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 入力検証（InputBox の validateInput 用）。不正な正規表現があればメッセージ、無ければ undefined。
+ */
+export function validateIgnorePatterns(patterns: string): string | undefined {
+  for (const p of splitIgnorePatterns(patterns)) {
+    const body = regexBody(p);
+    if (body === undefined) {
+      continue;
+    }
+    try {
+      new RegExp(body);
+    } catch (err) {
+      return `不正な正規表現 ${p}: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * パターン文字列（カンマ/改行区切り）→ 相対パス判定関数。空なら常に false。
+ * 各パターンは `/.../` で囲めば正規表現、それ以外は glob（混在可）。
+ * 正規表現は相対パス全体に対して `test`（アンカー無しは部分一致）。不正な正規表現は無視する。
+ * glob は VS Code 検索の除外欄に倣う:
  *  - `/` を含まないパターンは全階層のファイル名にマッチ（例: `*.lock`, `Cargo.toml`）
  *  - `**` は任意階層（0個含む）、`*` は `/` 以外の任意、`?` は1文字
  * 判定対象は worktree 基準の相対パス（区切りは `/`）。
  */
 export function makeIgnoreMatcher(patterns: string): (relPath: string) => boolean {
-  const globs = patterns
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (globs.length === 0) {
+  const regexes = splitIgnorePatterns(patterns)
+    .map(patternToRegExp)
+    .filter((re): re is RegExp => re !== undefined);
+  if (regexes.length === 0) {
     return () => false;
   }
-  const regexes = globs.map(globToRegExp);
   return (relPath: string) => {
     const p = relPath.replace(/\\/g, '/');
     return regexes.some((re) => re.test(p));

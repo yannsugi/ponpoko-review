@@ -222,7 +222,7 @@
       },
       {
         "command": "ponpokoReview.editIgnore",
-        "title": "無視するファイル(glob)を編集",
+        "title": "無視するファイル(glob / 正規表現)を編集",
         "icon": "$(circle-slash)",
         "category": "ponpoko-review"
       },
