@@ -30,3 +30,12 @@ test('renderMarkdown: code 無しならフェンスを出さない', () => {
   ]);
   assert.ok(!md.includes('```'));
 });
+
+test('renderMarkdown: ファイル全体へのコメントは行番号もフェンスも無し', () => {
+  const md = renderMarkdown('wt', 'main', [
+    { relpath: 'src/a.ts', body: 'このファイルも同じ方針で直して' },
+  ]);
+  assert.ok(md.includes('## src/a.ts (main...HEAD)'));
+  assert.ok(!md.includes('```'));
+  assert.ok(md.includes('このファイルも同じ方針で直して'));
+});

@@ -1,7 +1,7 @@
 require('./vscode-stub.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { dirChildren, compactDir, worktreeName, isUnderDir } = require('../out/diffTree.js');
+const { dirChildren, compactDir, worktreeName, isUnderDir, owningWorktreePath } = require('../out/diffTree.js');
 
 const wt = { path: '/repo', branch: 'main', head: 'x', detached: false };
 
@@ -53,4 +53,23 @@ test('isUnderDir: 出力先配下の判定', () => {
   assert.strictEqual(isUnderDir(out, '/repo/src/a.ts'), false);
   assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review'), false); // dir自身は除く
   assert.strictEqual(isUnderDir(out, '/repo/.ponpoko-review-x/a'), false); // 前方一致の誤判定なし
+});
+
+test('dirChildren: status none（差分外のコメント付きファイル）も並ぶ', () => {
+  const entries = [
+    { status: 'M', path: 'src/a.ts' },
+    { status: 'none', path: 'src/b.ts' },
+  ];
+  const nodes = dirChildren(wt, entries, 'src');
+  assert.deepStrictEqual(
+    nodes.map((n) => [n.kind, n.entry.path, n.entry.status]),
+    [['file', 'src/a.ts', 'M'], ['file', 'src/b.ts', 'none']],
+  );
+});
+
+test('owningWorktreePath: 入れ子 worktree は最長一致', () => {
+  const wts = [{ path: '/repo' }, { path: '/repo/.claude/worktrees/x' }];
+  assert.strictEqual(owningWorktreePath('/repo/src/a.ts', wts), '/repo');
+  assert.strictEqual(owningWorktreePath('/repo/.claude/worktrees/x/src/a.ts', wts), '/repo/.claude/worktrees/x');
+  assert.strictEqual(owningWorktreePath('/other/a.ts', wts), undefined);
 });

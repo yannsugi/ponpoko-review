@@ -1,7 +1,7 @@
 require('./vscode-stub.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { threadLineRange } = require('../out/comments.js');
+const { threadLineRange, isFileThread } = require('../out/comments.js');
 
 const mk = (sl, sc, el, ec) => ({ range: { start: { line: sl, character: sc }, end: { line: el, character: ec } } });
 
@@ -17,6 +17,8 @@ test('threadLineRange: 終端が次行頭(char0)なら1行戻す', () => {
   assert.deepStrictEqual(threadLineRange(mk(2, 0, 5, 0)), { start: 2, end: 4 });
 });
 
-test('threadLineRange: range無しは0', () => {
-  assert.deepStrictEqual(threadLineRange({}), { start: 0, end: 0 });
+test('threadLineRange: range無し（ファイル全体へのコメント）は undefined', () => {
+  assert.strictEqual(threadLineRange({}), undefined);
+  assert.strictEqual(isFileThread({}), true);
+  assert.strictEqual(isFileThread(mk(1, 0, 1, 0)), false);
 });

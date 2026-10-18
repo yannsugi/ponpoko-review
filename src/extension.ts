@@ -114,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
     baseStore,
     (fsPath) => store.listFor(fsPath),
     (dirPath) => store.countUnder(dirPath),
+    (dirPath) => store.filesWithComments(dirPath),
     context.extensionUri,
     ignoreStore,
   );
@@ -142,8 +143,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // 復元したコメントの行ズレを、保存したアンカー行で追従させる（起動後に一度）。
   void store.reanchor().then(onCommentsChanged);
 
-  // コメント位置へ移動（diff を開いて該当行を表示）。
-  const revealComment = async (uri: vscode.Uri, line: number): Promise<void> => {
+  // コメント位置へ移動（diff を開いて該当行を表示）。line 無し＝ファイル全体へのコメント（開くだけ）。
+  const revealComment = async (uri: vscode.Uri, line?: number): Promise<void> => {
     const node = await treeProvider.resolveFileNode(uri);
     if (node) {
       await openDiff(treeProvider.getBase(node.worktree.path), node);
@@ -151,7 +152,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.window.showTextDocument(uri);
     }
     const editor = vscode.window.activeTextEditor;
-    if (editor) {
+    if (editor && line !== undefined) {
       const pos = new vscode.Position(line, 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
@@ -336,19 +337,20 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage('ponpoko-review: コメントがありません。');
         return;
       }
-      type Item = vscode.QuickPickItem & { uri: vscode.Uri; line: number };
+      type Item = vscode.QuickPickItem & { uri: vscode.Uri; line?: number };
       const items: Item[] = threads
         .map((t) => {
-          const range = threadLineRange(t);
-          const ref =
-            range.end > range.start
-              ? `${range.start + 1}-${range.end + 1}`
-              : `${range.start + 1}`;
+          const range = threadLineRange(t); // ファイル全体へのコメントは undefined
+          const ref = !range
+            ? ' (ファイル全体)'
+            : range.end > range.start
+              ? `:${range.start + 1}-${range.end + 1}`
+              : `:${range.start + 1}`;
           return {
-            label: `$(comment) ${vscode.workspace.asRelativePath(t.uri)}:${ref}`,
+            label: `$(comment) ${vscode.workspace.asRelativePath(t.uri)}${ref}`,
             description: threadText(t).split('\n')[0],
             uri: t.uri,
-            line: range.start,
+            line: range?.start,
           };
         })
         .sort((a, b) => a.label.localeCompare(b.label));
@@ -365,7 +367,40 @@ export function activate(context: vscode.ExtensionContext): void {
     // ツリーのコメント子ノードクリック → 該当行へ。
     vscode.commands.registerCommand(
       'ponpokoReview.openComment',
-      (arg: { uri: vscode.Uri; line: number }) => revealComment(arg.uri, arg.line),
+      (arg: { uri: vscode.Uri; line?: number }) => revealComment(arg.uri, arg.line),
+    ),
+
+    // ファイル全体へのコメント（差分の有無を問わない。Notion のページコメント相当）。
+    // 入口: エクスプローラー/エディタタイトルの右クリック、コマンドパレット（アクティブエディタ）。
+    // エディタ上の Comments API のファイルコメント（enableFileComments）は addComment 経由で同じ扱い。
+    vscode.commands.registerCommand(
+      'ponpokoReview.addFileComment',
+      async (arg?: vscode.Uri | DiffNode | { resourceUri?: vscode.Uri }) => {
+        let uri: vscode.Uri | undefined;
+        if (arg instanceof vscode.Uri) {
+          uri = arg; // explorer/context, editor/title/context
+        } else if (arg && 'kind' in arg) {
+          // ツリーのファイル行（view/item/context）
+          uri =
+            arg.kind === 'file'
+              ? vscode.Uri.file(path.join(arg.worktree.path, arg.entry.path))
+              : undefined;
+        } else {
+          uri = arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri;
+        }
+        if (!uri || uri.scheme !== 'file') {
+          vscode.window.showWarningMessage(
+            'ponpoko-review: 作業ツリーのファイルを選択してください（file スキームのみ）。',
+          );
+          return;
+        }
+        const text = await askFileComment(vscode.workspace.asRelativePath(uri));
+        if (text === undefined) {
+          return;
+        }
+        store.addFileComment(uri, text);
+        onCommentsChanged();
+      },
     ),
 
     vscode.commands.registerCommand(
@@ -574,6 +609,55 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
   );
+}
+
+/**
+ * ファイル全体へのコメント本文を入力させる。行コメントの prefix ボタンと同じ
+ * [ask][nits][must][memo] を候補として並べ、入力中の本文に prefix を付けて確定できる
+ * （prefix は本文先頭のただのテキスト。構造化しない）。Esc で undefined。
+ */
+function askFileComment(fileLabel: string): Promise<string | undefined> {
+  const PREFIXES = ['ask', 'nits', 'must', 'memo'] as const;
+  return new Promise((resolve) => {
+    const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { prefix?: string }>();
+    qp.title = `ponpoko-review: ${fileLabel} にコメント（ファイル全体）`;
+    qp.placeholder = '本文を入力。Enter でそのまま、prefix を選ぶと先頭に付く';
+    qp.ignoreFocusOut = true;
+    qp.matchOnDescription = false;
+    qp.matchOnDetail = false;
+    const refresh = (value: string) => {
+      const v = value.trim();
+      qp.items = [
+        { label: v || '(本文を入力)', description: 'prefix なし', alwaysShow: true },
+        ...PREFIXES.map((p) => ({
+          label: `[${p}] ${v}`,
+          description: `[${p}]`,
+          prefix: p,
+          alwaysShow: true,
+        })),
+      ];
+    };
+    refresh('');
+    let done = false;
+    qp.onDidChangeValue(refresh);
+    qp.onDidAccept(() => {
+      const v = qp.value.trim();
+      if (!v) {
+        return; // 空本文は確定しない
+      }
+      const picked = qp.selectedItems[0];
+      done = true;
+      qp.hide();
+      resolve(picked?.prefix ? `[${picked.prefix}] ${v}` : v);
+    });
+    qp.onDidHide(() => {
+      qp.dispose();
+      if (!done) {
+        resolve(undefined);
+      }
+    });
+    qp.show();
+  });
 }
 
 export function deactivate(): void {

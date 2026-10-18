@@ -11,7 +11,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `npm ci`（再現性。devDependencies は exact 固定・runtime依存は無し）/ 追加時は `npm install --save-exact`
 - `npm run compile`（`tsc -p ./` → `out/`）/ `npm run watch`
 - デバッグ起動: VS Code で `F5`（Extension Development Host）。`.vscode/launch.json` 済み。
-- テストは無し。動作確認は F5 と、純粋関数は `node -e` で `out/*.js` を叩いて確認する。
+- `npm test`（`node --test`、`test/*.test.js`）で純粋関数をテスト。`vscode` は `test/vscode-stub.cjs` で差し替え。VS Code API 依存部分は F5 ＋ `docs/SMOKE_TEST.md` で手確認。
 - パッケージ: `npx vsce package` → `code --install-extension *.vsix`。
 
 ## アーキテクチャ（依存順）
@@ -23,16 +23,18 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 - `src/diffTree.ts` — `TreeDataProvider`。トップ=worktree、配下に dir/file ノード。
   - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。`commentsOnly` フィルタ（list/tree と直交、コメントのあるファイルだけ表示）。
   - ファイルの子＝コメント(CommentNode)。フォルダ/worktree に 💬 集計、差分なしは MessageNode。
+  - 差分に無いがコメントの付いたファイルは `visibleEntries` → `commentedExtras` で `status:'none'` の `TreeEntry` として合流（コメントが付いたときだけ出る。viewed チェック無し、クリックは `openDiff` が実ファイルを開く）。`cache`/`filesUnder`/進捗は差分(DiffEntry)のみで数える。入れ子 worktree は `owningWorktreePath`（最長一致）で親に出さない。
   - viewed チェックボックス。フォルダは配下全 viewed で checked（`manageCheckboxStateManually:true` で自前管理）。
   - worktree ごとの差分を `cache`（refresh 単位）。`refresh()`=cache破棄+git再取得、`softRefresh()`=再描画のみ（viewed/コメント変化用、ちらつき防止）。
   - ファイルアイコンは status の diff コーディコン（`STATUS_CODICON`: A=diff-added/M=diff-modified/D=diff-removed/R=diff-renamed＋git色。viewed は `disabledForeground` グレー）。画像SVGは行描画が重いので ThemeIcon に変更（`media/status/*.svg` と extensionUri 引数は復帰用に残置）。
 - `src/baseContentProvider.ts` — スキーム `ponpoko-review-base:` で `git show base:path` を供給。追加/欠落は空ドキュメント。
 - `src/openDiff.ts` — `vscode.diff`。left=**merge-base**仮想doc / **right=作業ツリーの実ファイル**。A は left 空、D は right 空、R は旧パス参照。base先端だと main 進行時に嘘の差分になるため merge-base を供給。
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。コメント入力欄に prefix ボタン `[ask][nits][must][memo]`（`addComment.<prefix>` コマンド、submit 亜種。Comments API は入力欄へのテキスト挿入不可のため）。prefix は本文先頭のただのテキストで md 出力にそのまま乗る（構造化しない）。
+  - **ファイル全体へのコメント** = `range` 無しスレッド（`SavedThread.line` 省略で永続化、`reanchor` 対象外）。`provideCommentingRanges` は `{ranges, enableFileComments:true}` を返す（VS Code 1.97+）。`addFileComment(uri,text)` はエクスプローラー/エディタタイトル/ツリー右クリックの入口用。`threadLineRange` は range 無しで `undefined`、`listFor` はファイルコメントを先頭に並べる。`filesWithComments(dir)` で差分外ファイルをツリーに合流させる。
 - `src/viewed.ts` — `ViewedStore`（workspaceState）。値＝チェック時の viewHash。
 - `src/worktreeBase.ts` — worktree ごとの比較先(base)上書き（workspaceState）。
 - `src/ignore.ts` — 「無視」glob ストア（workspaceState）＋ `makeIgnoreMatcher`(zero-dep glob→RegExp)。VS Code 検索の除外欄と同記法（スラッシュ無し=全階層ファイル名、`**`/`*`/`?`）。`visibleEntries` で適用（ツリー表示のみ。コメント/出力には不干渉）。
-- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
+- `src/markdown.ts` — `writeReview`。`combined:true`=全worktreeを1ファイル `<outputRoot>/review.md`(上部Submit)、`false`=worktree毎 `<outputRoot>/<worktree名>/review.md`(worktree行Submit)。見出し `path:line (base...HEAD)`、複数行選択は `path:開始-終了`、ファイル全体は `path` のみ（行番号・フェンス無し、同一ファイル内で先頭）。対象行のコードを ```言語 フェンスで添付。Resolve済みは出力から除外。書き出しは `review.md`(最新・固定パス、openReview/claude -p 用)＋`review-<timestamp>.md`(履歴)の二本立て。履歴は溜まる一方（掃除は将来の課題）。
 - `src/extension.ts` — activate / コマンド登録 / 結線。保存リフレッシュは 300ms デバウンス。
 
 ## 守るべき不変条件（罠）
@@ -53,7 +55,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 ## セキュリティ
 - `execFile` のみ（シェル注入なし）。`assertSafeRef` で引数注入対策。
 - `package.json` の `capabilities.untrustedWorkspaces:false`（未信頼ワークスペースでは無効）。
-- runtime の `dependencies` ゼロ（攻撃面はビルド時のみ）。devDependencies は exact 固定＋lock 同梱で `npm ci` 再現。`@types/vscode` は engines 最小(1.90.0)に一致させ、新しすぎる API の誤用を型で検出。
+- runtime の `dependencies` ゼロ（攻撃面はビルド時のみ）。devDependencies は exact 固定＋lock 同梱で `npm ci` 再現。`@types/vscode` は engines 最小(1.97.0)に一致させ、新しすぎる API の誤用を型で検出。
 
 ## ブランチ運用
 - 足場は `main`、機能実装は feature ブランチ（例 `feature/diff-tree`）。

@@ -11,7 +11,7 @@
     "url": "https://github.com/yannsugi/ponpoko-review.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
@@ -249,6 +249,12 @@
         "title": "このworktreeの比較先(target)を設定",
         "icon": "$(git-branch)",
         "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.addFileComment",
+        "title": "このファイルにコメント（ファイル全体）",
+        "icon": "$(comment)",
+        "category": "ponpoko-review"
       }
     ],
     "menus": {
@@ -324,6 +330,11 @@
           "command": "ponpokoReview.clearWorktree",
           "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
           "group": "inline@2"
+        },
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.file",
+          "group": "ponpokoReview@1"
         }
       ],
       "comments/commentThread/context": [
@@ -440,6 +451,20 @@
           "command": "ponpokoReview.setWorktreeBase",
           "when": "false"
         }
+      ],
+      "explorer/context": [
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "group": "ponpokoReview@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "ponpokoReview.addFileComment",
+          "when": "resourceScheme == file",
+          "group": "ponpokoReview@1"
+        }
       ]
     }
   },
@@ -451,7 +476,7 @@
   },
   "devDependencies": {
     "@types/node": "20.19.43",
-    "@types/vscode": "1.90.0",
+    "@types/vscode": "1.97.0",
     "@vscode/vsce": "3.9.2",
     "typescript": "5.9.3"
   }

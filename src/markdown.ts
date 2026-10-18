@@ -4,10 +4,12 @@ import { Worktree } from './git';
 import { threadLineRange, threadText } from './comments';
 import { worktreeName } from './diffTree';
 
-interface ReviewItem {
+export interface ReviewItem {
   relpath: string;
-  line: number; // 1-based 開始行（HEAD 基準）
-  endLine: number; // 1-based 終了行（単一行なら line と同じ）
+  /** 1-based 開始行（HEAD 基準）。ファイル全体へのコメントは undefined。 */
+  line?: number;
+  /** 1-based 終了行（単一行なら line と同じ）。ファイル全体へのコメントは undefined。 */
+  endLine?: number;
   code?: string; // コメント対象行のコード（文脈）
   body: string;
 }
@@ -104,21 +106,28 @@ export async function writeReview(opts: {
     const relpath = wt
       ? path.relative(wt.path, fsPath).split(path.sep).join('/')
       : fsPath;
-    const range = threadLineRange(thread); // 0-based, end含む
-    const line = range.start + 1; // 0-based → 1-based
-    const endLine = range.end + 1;
-    // コメント対象行のコードを文脈として抽出。
-    const lines = await getLines(thread.uri);
-    const code = lines.slice(range.start, range.end + 1).join('\n') || undefined;
-
+    const range = threadLineRange(thread); // 0-based, end含む。ファイル全体なら undefined
     const group = grouped.get(name) ?? { wt, items: [] };
-    group.items.push({ relpath, line, endLine, code, body });
+    if (range) {
+      const line = range.start + 1; // 0-based → 1-based
+      const endLine = range.end + 1;
+      // コメント対象行のコードを文脈として抽出。
+      const lines = await getLines(thread.uri);
+      const code = lines.slice(range.start, range.end + 1).join('\n') || undefined;
+      group.items.push({ relpath, line, endLine, code, body });
+    } else {
+      // ファイル全体へのコメント: 行番号もコードフェンスも無し。
+      group.items.push({ relpath, body });
+    }
     grouped.set(name, group);
     itemCount++;
   }
 
+  // 同一ファイル内はファイル全体へのコメント（line 無し）を先頭に、以降は行順。
   const sortItems = (items: ReviewItem[]) =>
-    items.sort((a, b) => (a.relpath === b.relpath ? a.line - b.line : a.relpath < b.relpath ? -1 : 1));
+    items.sort((a, b) =>
+      a.relpath === b.relpath ? (a.line ?? 0) - (b.line ?? 0) : a.relpath < b.relpath ? -1 : 1,
+    );
 
   const files: string[] = [];
   // 同一 Submit 内は全ファイル同じ timestamp（1回の書き出し＝1世代）。
@@ -161,9 +170,14 @@ export async function writeReview(opts: {
 export function renderMarkdown(name: string, base: string, items: ReviewItem[]): string {
   const lines: string[] = [`# Review Instructions (${name})`, ''];
   for (const item of items) {
-    // 複数行選択は path:開始-終了、単一行は path:行。
-    const ref = item.endLine > item.line ? `${item.line}-${item.endLine}` : `${item.line}`;
-    lines.push(`## ${item.relpath}:${ref} (${base}...HEAD)`);
+    // 複数行選択は path:開始-終了、単一行は path:行、ファイル全体は path のみ。
+    const ref =
+      item.line === undefined
+        ? ''
+        : (item.endLine ?? item.line) > item.line
+          ? `:${item.line}-${item.endLine}`
+          : `:${item.line}`;
+    lines.push(`## ${item.relpath}${ref} (${base}...HEAD)`);
     // 対象コードを ``` フェンスで文脈として添える（行ズレに強く、Claudeが文脈を掴める）。
     if (item.code) {
       const lang = path.extname(item.relpath).slice(1);
