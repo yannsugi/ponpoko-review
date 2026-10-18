@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { listBranches, viewHash, viewHashes, worktreeList, Worktree } from './git';
+import { listBranches, mergeBase, viewHash, viewHashes, worktreeList, Worktree } from './git';
 import { DiffNode, DiffTreeProvider, WorktreeNode, worktreeName } from './diffTree';
-import { BASE_SCHEME, BaseContentProvider } from './baseContentProvider';
+import { BASE_SCHEME, BaseContentProvider, makeBaseUri } from './baseContentProvider';
 import { openDiff } from './openDiff';
 import { CommentStore, threadLineRange, threadText } from './comments';
 import { writeReview } from './markdown';
-import { ViewedStore } from './viewed';
+import { ViewedSnapshot, ViewedStore, ViewedUndoEntry, ViewedUndoStack } from './viewed';
 import { WorktreeBaseStore } from './worktreeBase';
 import { IgnoreStore, validateIgnorePatterns } from './ignore';
+import { MarkStore } from './marks';
 
 /** 拡張の exports（Extension Development Host 上の自動スモークテストから内部を覗く用）。 */
 export interface PonpokoApi {
@@ -113,6 +114,10 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
   // 「無視」glob ストア（ノイズ非表示）
   const ignoreStore = new IgnoreStore(context.workspaceState);
 
+  // 📌 マーク（<outputDir>/marks.txt。外部エージェントも書ける）
+  const marks = new MarkStore(repoRoot, resolveOutputRoot);
+  context.subscriptions.push(marks);
+
   // 差分ツリー
   const treeProvider = new DiffTreeProvider(
     repoRoot,
@@ -123,6 +128,18 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
     (dirPath) => store.filesWithComments(dirPath),
     context.extensionUri,
     ignoreStore,
+    marks,
+  );
+  // marks.txt の変化（外部追記・自分の書き戻し）→ 再描画のみ。
+  context.subscriptions.push(marks.onDidChange(() => treeProvider.softRefresh()));
+  void marks.start();
+  // 出力先が変わったら marks.txt の場所も変わる → watcher を張り直す。
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('ponpokoReview.outputDir')) {
+        void marks.start();
+      }
+    }),
   );
 
   // ステータスバー: 未提出コメント数。クリックでコメント一覧へ。
@@ -193,10 +210,17 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       'ponpokoReview.hasIgnore',
       treeProvider.getIgnore().length > 0,
     );
+  const syncMarkedOnly = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.markedOnly',
+      treeProvider.getMarkedOnly(),
+    );
   syncViewMode();
   syncCommentsOnly();
   syncHideViewed();
   syncIgnore();
+  syncMarkedOnly();
   context.subscriptions.push(
     // 無視 glob を編集（VS Code 検索の除外欄と同思想。カンマ/改行区切り）。
     vscode.commands.registerCommand('ponpokoReview.editIgnore', async () => {
@@ -249,7 +273,47 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       treeProvider.setCommentsOnly(false);
       syncCommentsOnly();
     }),
+    vscode.commands.registerCommand('ponpokoReview.markedOnlyOn', () => {
+      treeProvider.setMarkedOnly(true);
+      syncMarkedOnly();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.markedOnlyOff', () => {
+      treeProvider.setMarkedOnly(false);
+      syncMarkedOnly();
+    }),
+    // 📌 マークのトグル（ファイル行 inline / フォルダは配下一括）。marks.txt に書き戻す。
+    vscode.commands.registerCommand('ponpokoReview.mark', (node: DiffNode) =>
+      marks.set(nodeAbsPaths(node), true),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.unmark', (node: DiffNode) =>
+      marks.set(nodeAbsPaths(node), false),
+    ),
+    vscode.commands.registerCommand('ponpokoReview.clearMarks', async () => {
+      const n = marks.all().size;
+      if (n === 0) {
+        vscode.window.showInformationMessage('ponpoko-review: マークはありません。');
+        return;
+      }
+      await marks.clear();
+      vscode.window.showInformationMessage(`ponpoko-review: 📌 マーク ${n} 件を解除しました。`);
+    }),
   );
+
+  // ノード（ファイル/フォルダ）が指す作業ツリー上の絶対パス一覧（フォルダは配下差分ファイル）。
+  const nodeAbsPaths = (node: DiffNode | undefined): string[] => {
+    if (!node) {
+      return [];
+    }
+    if (node.kind === 'file') {
+      return [path.join(node.worktree.path, node.entry.path)];
+    }
+    if (node.kind === 'dir') {
+      return treeProvider
+        .filesUnder(node.worktree, node.relDir)
+        .map((f) => path.join(node.worktree.path, f.path));
+    }
+    return [];
+  };
 
   // 1ファイルを viewed にする（現在の差分ハッシュを記録）。
   const markViewed = async (worktree: { path: string }, filePath: string): Promise<void> => {
@@ -262,10 +326,67 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
     }
   };
 
+  // 直前のチェック操作の取り消し（hideViewed 中の誤操作救済）。セッション限り・上限 5 件。
+  const undoStack = new ViewedUndoStack(5);
+  const undoEntry = async (entry: ViewedUndoEntry): Promise<void> => {
+    // 保存していたハッシュをそのまま書き戻す（再ハッシュしないので git を叩かない）。
+    await Promise.all(
+      entry.snapshots.map((sn) =>
+        sn.hash === undefined
+          ? viewed.unsetViewed(sn.worktreePath, sn.file)
+          : viewed.setViewed(sn.worktreePath, sn.file, sn.hash),
+      ),
+    );
+    treeProvider.softRefresh();
+    // どれだったか分かるように、戻したファイルをツリー上で見せる。
+    const first = entry.snapshots[0];
+    const node = treeProvider.fileNodeFor(first.worktreePath, first.file);
+    if (node) {
+      try {
+        await treeView.reveal(node, { select: true, focus: false, expand: false });
+      } catch {
+        // フィルタ等で表示されていない場合は諦める。
+      }
+    }
+    const n = entry.snapshots.length;
+    vscode.window.showInformationMessage(
+      `ponpoko-review: ${n === 1 ? first.file : `${n} 件`} の viewed 操作を元に戻しました。`,
+    );
+  };
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ponpokoReview.undoViewed', async () => {
+      const entry = undoStack.pop();
+      if (!entry) {
+        vscode.window.showInformationMessage('ponpoko-review: 元に戻せる viewed 操作はありません。');
+        return;
+      }
+      await undoEntry(entry);
+    }),
+  );
+
   // チェックボックス操作 → viewed の保存/解除。
   // フォルダをチェックすると配下ファイルを一括 viewed/解除（逆も getTreeItem 側で集計）。
   context.subscriptions.push(
     treeView.onDidChangeCheckboxState(async (e) => {
+      // 適用前の状態をイベント単位でスナップショット（undo 用）。
+      const snapshots: ViewedSnapshot[] = [];
+      let checkedCount = 0;
+      const snap = (wtPath: string, file: string) =>
+        snapshots.push({ worktreePath: wtPath, file, hash: viewed.getHash(wtPath, file) });
+      for (const [node, state] of e.items) {
+        const checked = state === vscode.TreeItemCheckboxState.Checked;
+        if (node.kind === 'file') {
+          snap(node.worktree.path, node.entry.path);
+          checkedCount += checked ? 1 : 0;
+        } else if (node.kind === 'dir') {
+          const files = treeProvider.filesUnder(node.worktree, node.relDir);
+          files.forEach((f) => snap(node.worktree.path, f.path));
+          checkedCount += checked ? files.length : 0;
+        }
+      }
+      const entry: ViewedUndoEntry = { checkedCount, snapshots };
+      undoStack.push(entry);
+
       for (const [node, state] of e.items) {
         const checked = state === vscode.TreeItemCheckboxState.Checked;
         if (node.kind === 'file') {
@@ -297,6 +418,22 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
         }
       }
       treeProvider.softRefresh(); // viewed のみ変化 → git再取得せず再描画（ちらつき防止）
+
+      // チェック方向だけトーストで「元に戻す」導線を出す（解除方向はファイルが消えないので不要）。
+      // トーストはこの操作に紐付ける（後続の操作ではなく、この 1 件だけを戻す）。
+      if (checkedCount > 0) {
+        void vscode.window
+          .showInformationMessage(`ponpoko-review: ${checkedCount} 件を viewed にしました`, '元に戻す')
+          .then(async (choice) => {
+            if (choice !== '元に戻す') {
+              return;
+            }
+            const taken = undoStack.take(entry);
+            if (taken) {
+              await undoEntry(taken);
+            }
+          });
+      }
     }),
   );
 
@@ -326,6 +463,7 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
 
   context.subscriptions.push(
     vscode.commands.registerCommand('ponpokoReview.refresh', () => {
+      void marks.reload(); // watcher を取りこぼしても手動更新で追従できるように
       treeProvider.refresh();
     }),
 
@@ -334,6 +472,44 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
         return;
       }
       return openDiff(treeProvider.getBase(node.worktree.path), node);
+    }),
+
+    // 右クリック: ファイルを開く（作業ツリーの実ファイル。既定クリックの diff は変えない）。
+    // 削除(D)は右側の実ファイルが無いので base 側（merge-base）の仮想 doc を開く。
+    vscode.commands.registerCommand('ponpokoReview.openFile', async (node: DiffNode) => {
+      if (!node || node.kind !== 'file') {
+        return;
+      }
+      const { worktree, entry } = node;
+      let uri: vscode.Uri;
+      if (entry.status === 'D') {
+        const base = treeProvider.getBase(worktree.path);
+        let ref = base;
+        try {
+          ref = await mergeBase(base, worktree.path);
+        } catch {
+          // merge-base が取れなければ base 先端。
+        }
+        uri = makeBaseUri(ref, worktree.path, entry.oldPath ?? entry.path);
+      } else {
+        uri = vscode.Uri.file(path.join(worktree.path, entry.path));
+      }
+      await vscode.window.showTextDocument(uri, { preview: false });
+    }),
+
+    // 右クリック: パスをコピー。相対は worktree ルート基準（ツリー表示と一致）。
+    // D は作業ツリーに無いがパス文字列としてはそのまま返す。フォルダは relDir。
+    vscode.commands.registerCommand('ponpokoReview.copyRelativePath', (node: DiffNode) => {
+      const rel = nodeRelPath(node);
+      if (rel !== undefined) {
+        return vscode.env.clipboard.writeText(rel);
+      }
+    }),
+    vscode.commands.registerCommand('ponpokoReview.copyFullPath', (node: DiffNode) => {
+      const rel = nodeRelPath(node);
+      if (rel !== undefined && (node.kind === 'file' || node.kind === 'dir')) {
+        return vscode.env.clipboard.writeText(path.join(node.worktree.path, rel));
+      }
     }),
 
     // コメントへクイックアクセス（QuickPick → diff を開いて該当行へ）。未解決のみ。
@@ -608,6 +784,7 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
         { label: '$(go-to-file) レビュー md (review.md) を開く', cmd: 'ponpokoReview.openReview' },
         { label: '$(folder) 出力先ディレクトリを設定', cmd: 'ponpokoReview.setOutputDir' },
         { label: '$(git-branch) 既定の比較先(base)を選択', cmd: 'ponpokoReview.setBase' },
+        { label: '$(pinned) 📌 マークを全解除 (marks.txt を空にする)', cmd: 'ponpokoReview.clearMarks' },
       ];
       const picked = await vscode.window.showQuickPick(items, {
         placeHolder: 'ponpoko-review',
@@ -667,6 +844,20 @@ function askFileComment(fileLabel: string): Promise<string | undefined> {
     });
     qp.show();
   });
+}
+
+/** ファイル/フォルダ行の worktree ルート基準の相対パス。それ以外のノードは undefined。 */
+function nodeRelPath(node: DiffNode | undefined): string | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.kind === 'file') {
+    return node.entry.path;
+  }
+  if (node.kind === 'dir') {
+    return node.relDir;
+  }
+  return undefined;
 }
 
 export function deactivate(): void {
