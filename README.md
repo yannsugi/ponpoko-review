@@ -94,7 +94,7 @@ code --uninstall-extension yannsugi.ponpoko-review # 削除
 | 🚫 無視 | ノイズファイルを glob / 正規表現で非表示（入力欄。有効時は × で解除） |
 | ⚙ 設定（右端） | 出力先 / 既定の比較先を設定 |
 
-worktree 行にホバーすると、その worktree 単位の **比較先設定 / 出力 / クリア** が出る。
+worktree 行にホバーすると、その worktree 単位の **比較先設定 / 出力 / クリア / 出力先を開く** が出る。
 
 ### worktree 単位の差分ツリー
 - トップ階層が worktree。配下にそのworktreeの差分ファイルがぶら下がる。
@@ -172,6 +172,8 @@ echo "/abs/path/to/worktree/src/handlers/user_handler.rs" >> .ponpoko-review/mar
 - **上部の Submit**: 全 worktree を**1ファイルにまとめて** `.ponpoko-review/review.md` に出力。
 - **各 worktree 行の Submit**: その worktree だけを `.ponpoko-review/<worktree名>/review.md` に出力。
 - 見出しは `path:line (base...HEAD)` 形式（複数行選択は `path:開始-終了`、ファイル全体は `path`）。
+- 本文の先頭に `書き出し: <日時> / base: <base>...HEAD` の 1 行が入る（`review.md` は固定名で上書きされるため、開いただけで世代が分かる）。
+- **worktree 行の「出力先を開く」**: その worktree の `review.md` を開く。無ければ統合の `.ponpoko-review/review.md`、それも無ければエクスプローラーで出力先ディレクトリを表示。
 - Clear も同様に、上部は全体、worktree 行はその worktree だけ。
 
 ### worktree ごとの比較先

@@ -41,6 +41,8 @@
 ## 5. 出力
 - [ ] 上部 Submit → `.ponpoko-review/review.md`（全worktree統合）が**自動で開く**
 - [ ] worktree 行の Submit → `.ponpoko-review/<worktree名>/review.md`（個別）
+- [ ] 書き出した md の見出し直下に `書き出し: YYYY-MM-DD HH:MM:SS / base: main...HEAD` が入り、`review.md` と `review-<timestamp>.md` で同じ日時
+- [ ] worktree 行の $(go-to-file) → その worktree の `review.md` が開く（無ければ統合 `review.md`、それも無ければ出力先ディレクトリをエクスプローラーで表示、ディレクトリも無ければトースト）
 - [ ] ステータスバーに未提出コメント数。クリックでコメント一覧へ
 
 ## 6. 設定 / worktree
