@@ -27,7 +27,8 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - viewed チェックボックス。フォルダは配下全 viewed で checked（`manageCheckboxStateManually:true` で自前管理）。
   - TreeItem に安定 `id`（`wt:`/`dir:`/`file:` 接頭辞）＋ `getParent` を実装しているので `treeView.reveal` が使える（undo 後の表示）。ノードは都度生成されるため id での同一視が必須。
   - worktree ごとの差分を `cache`（refresh 単位）。`refresh()`=cache破棄+git再取得、`softRefresh()`=再描画のみ（viewed/コメント変化用、ちらつき防止）。
-  - ファイルアイコンは status の diff コーディコン（`STATUS_CODICON`: A=diff-added/M=diff-modified/D=diff-removed/R=diff-renamed＋git色。viewed は `disabledForeground` グレー）。画像SVGは行描画が重いので ThemeIcon に変更（`media/status/*.svg` と extensionUri 引数は復帰用に残置）。
+  - ファイルアイコンは status の diff コーディコン（`STATUS_CODICON`: A=diff-added/M=diff-modified/D=diff-removed/R=diff-renamed＋git色。viewed は `disabledForeground` グレー）。画像SVGは行描画が重いので ThemeIcon に変更（旧 `media/status/*.svg` は削除済み。必要なら git 履歴 `faa90e4` から復帰）。
+- `src/paths.ts` — パス判定の純粋関数（依存なし・テスト有）。`isUnder(dir, p, {excludeSelf?})`（配下判定。既定は dir 自身を含む、diffTree の `isUnderDir` は excludeSelf 版の薄いラッパ）、`owningWorktree`/`owningWorktreePath`（最長一致の worktree、入れ子対応）、`resolveOutputRoot(repoRoot, setting)`＋設定読込版 `configuredOutputRoot`。markdown / comments / diffTree / extension はこれを使う（各所で再実装しない）。
 - `src/baseContentProvider.ts` — スキーム `ponpoko-review-base:` で `git show base:path` を供給。追加/欠落は空ドキュメント。
 - `src/openDiff.ts` — `vscode.diff`。left=**merge-base**仮想doc / **right=作業ツリーの実ファイル**。A は left 空、D は right 空、R は旧パス参照。base先端だと main 進行時に嘘の差分になるため merge-base を供給。
 - `src/comments.ts` — Comments API。`CommentStore` がスレッド保持＋**workspaceState 永続化**（`restore`/`persist`）。`countFor`(💬件数)。コメント入力欄に prefix ボタン `[ask][nits][must][memo]`（`addComment.<prefix>` コマンド、submit 亜種。Comments API は入力欄へのテキスト挿入不可のため）。prefix は本文先頭のただのテキストで md 出力にそのまま乗る（構造化しない）。
@@ -53,6 +54,8 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
 ## 設定
 - `ponpokoReview.baseBranch`（既定 `main`）= 既定の比較先。worktree 個別は `worktreeBase` で上書き（★表示）。
 - `ponpokoReview.outputDir`（既定 `.ponpoko-review`）。相対=ルート基準・絶対可。
+- `ponpokoReview.afterSubmit`（`clear`/`resolve`/`none`、既定 `clear`）= Submit 後に出力済みコメントを削除 / Resolve / 何もしない。
+- multi-root ワークスペースは非対応（`workspaceFolders[0]` 固定。worktree 探索・outputDir の基準はそのフォルダ）。
 
 ## セキュリティ
 - `execFile` のみ（シェル注入なし）。`assertSafeRef` で引数注入対策。

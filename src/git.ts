@@ -300,14 +300,3 @@ export async function defaultBaseBranch(cwd: string): Promise<string | undefined
   }
   return undefined;
 }
-
-/** base 側にそのパスが存在するか（git show が成功するか）を判定する。 */
-export async function existsAtBase(base: string, path: string, cwd: string): Promise<boolean> {
-  try {
-    assertSafeRef(base);
-    await runGit(['cat-file', '-e', `${base}:${path}`], cwd);
-    return true;
-  } catch {
-    return false;
-  }
-}

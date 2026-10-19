@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Worktree } from './git';
 import { threadLineRange, threadText } from './comments';
 import { worktreeName } from './diffTree';
+import { owningWorktree } from './paths';
 
 export interface ReviewItem {
   relpath: string;
@@ -32,27 +33,6 @@ export function timestampedName(d: Date): string {
     `review-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
     `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.md`
   );
-}
-
-/** fsPath が dir 配下かどうか。 */
-export function isUnder(dir: string, fsPath: string): boolean {
-  const rel = path.relative(dir, fsPath);
-  return !rel.startsWith('..') && !path.isAbsolute(rel);
-}
-
-/** uri を所有する worktree を、パスの最長前方一致で求める。 */
-function owningWorktree(fsPath: string, worktrees: Worktree[]): Worktree | undefined {
-  let best: Worktree | undefined;
-  for (const wt of worktrees) {
-    const rel = path.relative(wt.path, fsPath);
-    // wt 配下なら rel は '..' で始まらず、絶対パスにもならない。
-    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
-      if (!best || wt.path.length > best.path.length) {
-        best = wt;
-      }
-    }
-  }
-  return best;
 }
 
 /**

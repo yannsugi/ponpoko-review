@@ -182,6 +182,7 @@ echo "/abs/path/to/worktree/src/handlers/user_handler.rs" >> .ponpoko-review/mar
 | `ponpokoReview.afterSubmit` | `clear` | Submit 後の出力コメントの扱い（`clear`/`resolve`/`none`） |
 
 歯車から「出力先ディレクトリ」「既定の比較先」をその場で設定できる。
+multi-root ワークスペースは非対応（最初のフォルダのみを対象にする）。
 比較先まわりは上部に出さず、worktree ごとの設定に寄せている。
 
 ---
