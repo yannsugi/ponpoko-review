@@ -23,6 +23,25 @@ export function worktreeName(wt: Worktree): string {
   return path.basename(wt.path);
 }
 
+/** レビュー対象が 1 件以上あり、全て viewed なら完了。対象 0 件(差分なし)は完了ではない。 */
+export function isWorktreeComplete(done: number, total: number): boolean {
+  return total > 0 && done === total;
+}
+
+/**
+ * worktree 行の進捗表示。対象 0 件は空文字（表示しない）、完了は「✓ N 件 完了」、
+ * それ以外は「✓済/総数」。
+ */
+export function worktreeProgressLabel(done: number, total: number): string {
+  if (total <= 0) {
+    return '';
+  }
+  if (isWorktreeComplete(done, total)) {
+    return `✓ ${total} 件 完了`;
+  }
+  return `✓${done}/${total}`;
+}
+
 /**
  * status → コーディコン＋git色。画像(SVG)アイコンはスクロール描画が重いため、
  * 軽いフォントグリフ(ThemeIcon)を使う。VS Code が差分表示用に用意した
@@ -450,17 +469,17 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       : node.worktree.branch ?? '(no branch)';
     // viewed 進捗「✓済/総数」。総数は無視glob適用後（レビュー対象）。hideViewed で
     // ファイルがツリーから消えても全体進捗が分かるように worktree 行だけに出す。
-    let progress = '';
     const entries = (await this.entriesFor(node.worktree)) ?? [];
     const targets = this.ignorePattern
       ? entries.filter((e) => !this.ignoreMatcher(e.path))
       : entries;
-    if (targets.length > 0) {
-      const done = targets.filter((e) =>
-        this.viewed.isViewed(node.worktree.path, e.path),
-      ).length;
-      progress = `  ✓${done}/${targets.length}`;
-    }
+    const done = targets.filter((e) =>
+      this.viewed.isViewed(node.worktree.path, e.path),
+    ).length;
+    // 対象が 1 件以上あり全て viewed なら「完了」。差分なし(0 件)は完了扱いしない。
+    const complete = isWorktreeComplete(done, targets.length);
+    const label = worktreeProgressLabel(done, targets.length);
+    const progress = label ? `  ${label}` : '';
     const marked = targets.filter((e) => this.isMarked(node.worktree, e.path)).length;
     // ラベルは簡潔に「current → target」。詳細(意味)は tooltip。上書きは ★、コメントは 💬N。
     const cc = this.commentCountUnder(node.worktree.path);
@@ -470,12 +489,16 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       progress +
       (marked > 0 ? `  📌${marked}` : '') +
       (cc > 0 ? `  💬${cc}` : '');
-    item.iconPath = new vscode.ThemeIcon('repo');
+    // 完了した worktree は $(repo) の形はそのまま色だけ緑にして「終わった感」を出す。
+    item.iconPath = complete
+      ? new vscode.ThemeIcon('repo', new vscode.ThemeColor('charts.green'))
+      : new vscode.ThemeIcon('repo');
     item.id = worktreeId(node.worktree);
     item.tooltip = new vscode.MarkdownString(
       `**${worktreeName(node.worktree)}**\n\n` +
         `current: \`${current}\`  （変更元 / git head）\n\n` +
         `target: \`${target}\`  （マージ先 / base${overridden ? '・このworktree個別設定 ★' : '・グローバル設定'}）\n\n` +
+        (complete ? `✓ すべて表示済み（${targets.length} 件）\n\n` : '') +
         `${node.worktree.path}`,
     );
     item.contextValue = 'ponpoko.worktree';
