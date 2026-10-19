@@ -209,10 +209,17 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       'ponpokoReview.markedOnly',
       treeProvider.getMarkedOnly(),
     );
+  const syncHideEmptyWorktrees = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'ponpokoReview.hideEmptyWorktrees',
+      treeProvider.getHideEmptyWorktrees(),
+    );
   syncCommentsOnly();
   syncHideViewed();
   syncIgnore();
   syncMarkedOnly();
+  syncHideEmptyWorktrees();
   context.subscriptions.push(
     // 無視 glob を編集（VS Code 検索の除外欄と同思想。カンマ/改行区切り）。
     vscode.commands.registerCommand('ponpokoReview.editIgnore', async () => {
@@ -269,6 +276,14 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
     vscode.commands.registerCommand('ponpokoReview.markedOnlyOff', () => {
       treeProvider.setMarkedOnly(false);
       syncMarkedOnly();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.hideEmptyWorktreesOn', () => {
+      treeProvider.setHideEmptyWorktrees(true);
+      syncHideEmptyWorktrees();
+    }),
+    vscode.commands.registerCommand('ponpokoReview.hideEmptyWorktreesOff', () => {
+      treeProvider.setHideEmptyWorktrees(false);
+      syncHideEmptyWorktrees();
     }),
     // 📌 マークのトグル（ファイル行 inline / フォルダは配下一括）。marks.txt に書き戻す。
     vscode.commands.registerCommand('ponpokoReview.mark', (node: DiffNode) =>
