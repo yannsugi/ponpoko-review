@@ -35,6 +35,15 @@ export function timestampedName(d: Date): string {
   );
 }
 
+/** 本文に書く人間向けの書き出し日時（ローカル時刻、例: 2026-10-19 14:30:05）。 */
+export function formatWrittenAt(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    ` ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
+
 /**
  * 全コメントスレッドを worktree 単位にまとめ、
  * `<outputRoot>/<worktree-name>/review.md` に書き出す。
@@ -111,7 +120,9 @@ export async function writeReview(opts: {
 
   const files: string[] = [];
   // 同一 Submit 内は全ファイル同じ timestamp（1回の書き出し＝1世代）。
-  const stamp = timestampedName(new Date());
+  // 履歴ファイル名と本文の「書き出し:」行は同じ Date から作り、review.md と履歴の内容を一致させる。
+  const writtenAt = new Date();
+  const stamp = timestampedName(writtenAt);
   // review.md（最新・固定パス）と timestamp 付き履歴の二本立てで書く。
   // files には固定パスだけ入れる（呼び出し側が「最新」として開く）。
   const writeBoth = async (dir: vscode.Uri, md: string): Promise<void> => {
@@ -129,7 +140,7 @@ export async function writeReview(opts: {
     for (const [name, { wt, items }] of grouped) {
       sortItems(items);
       const base = wt ? resolveBase(wt.path) : resolveBase('');
-      sections.push(renderMarkdown(name, base, items));
+      sections.push(renderMarkdown(name, base, items, writtenAt));
     }
     await writeBoth(vscode.Uri.file(outputRoot), sections.join('\n'));
     return { files, itemCount };
@@ -139,16 +150,30 @@ export async function writeReview(opts: {
   for (const [name, { wt, items }] of grouped) {
     sortItems(items);
     const base = wt ? resolveBase(wt.path) : resolveBase('');
-    const md = renderMarkdown(name, base, items);
+    const md = renderMarkdown(name, base, items, writtenAt);
     await writeBoth(vscode.Uri.file(path.join(outputRoot, name)), md);
   }
 
   return { files, itemCount };
 }
 
-/** 1 worktree 分の review.md 本文を組み立てる。 */
-export function renderMarkdown(name: string, base: string, items: ReviewItem[]): string {
-  const lines: string[] = [`# Review Instructions (${name})`, ''];
+/**
+ * 1 worktree 分の review.md 本文を組み立てる。
+ * 見出し直下に「書き出し: <日時> / base: <base>...HEAD」を 1 行入れる
+ * （review.md は固定名で上書きされるため、開いただけで世代が分かるように）。
+ */
+export function renderMarkdown(
+  name: string,
+  base: string,
+  items: ReviewItem[],
+  writtenAt: Date,
+): string {
+  const lines: string[] = [
+    `# Review Instructions (${name})`,
+    '',
+    `書き出し: ${formatWrittenAt(writtenAt)} / base: ${base}...HEAD`,
+    '',
+  ];
   for (const item of items) {
     // 複数行選択は path:開始-終了、単一行は path:行、ファイル全体は path のみ。
     const ref =

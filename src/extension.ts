@@ -675,6 +675,45 @@ export function activate(context: vscode.ExtensionContext): PonpokoApi | undefin
       },
     ),
 
+    // worktree 単位: 出力先へ遷移する導線。
+    // <outputRoot>/<worktree名>/review.md → <outputRoot>/review.md(統合) → 出力先ディレクトリの順に探す。
+    vscode.commands.registerCommand(
+      'ponpokoReview.openWorktreeReview',
+      async (node: WorktreeNode) => {
+        if (!node || node.kind !== 'worktree') {
+          return;
+        }
+        const outputRoot = resolveOutputRoot();
+        const exists = async (uri: vscode.Uri): Promise<boolean> => {
+          try {
+            await vscode.workspace.fs.stat(uri);
+            return true;
+          } catch {
+            return false;
+          }
+        };
+        const candidates = [
+          vscode.Uri.file(path.join(outputRoot, worktreeName(node.worktree), 'review.md')),
+          vscode.Uri.file(path.join(outputRoot, 'review.md')),
+        ];
+        for (const file of candidates) {
+          if (await exists(file)) {
+            const doc = await vscode.workspace.openTextDocument(file);
+            await vscode.window.showTextDocument(doc, { preview: false });
+            return;
+          }
+        }
+        const dir = vscode.Uri.file(outputRoot);
+        if (await exists(dir)) {
+          await vscode.commands.executeCommand('revealInExplorer', dir);
+          return;
+        }
+        vscode.window.showInformationMessage(
+          'ponpoko-review: まだ書き出されていません。Submit で review.md を書き出してください。',
+        );
+      },
+    ),
+
     // worktree 単位: そのworktreeのコメントだけクリア。
     vscode.commands.registerCommand(
       'ponpokoReview.clearWorktree',
