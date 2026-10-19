@@ -251,6 +251,12 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.openWorktreeReview",
+        "title": "このworktreeの出力先を開く (review.md)",
+        "icon": "$(go-to-file)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.addFileComment",
         "title": "このファイルにコメント（ファイル全体）",
         "icon": "$(comment)",
@@ -413,6 +419,11 @@
           "group": "inline@2"
         },
         {
+          "command": "ponpokoReview.openWorktreeReview",
+          "when": "view == ponpokoReview.diffTree && viewItem == ponpoko.worktree",
+          "group": "inline@3"
+        },
+        {
           "command": "ponpokoReview.addFileComment",
           "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.file/",
           "group": "1_open@1"
@@ -555,6 +566,10 @@
         },
         {
           "command": "ponpokoReview.setWorktreeBase",
+          "when": "false"
+        },
+        {
+          "command": "ponpokoReview.openWorktreeReview",
           "when": "false"
         },
         {
