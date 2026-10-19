@@ -21,7 +21,7 @@ worktree 単位で Markdown(`review.md`)に書き出す**個人用**拡張。修
   - `viewHash` / `viewHashes`(バッチ): ハッシュ＝`<base blob oid>:<作業ツリー blob oid>`。`ls-tree`＋`hash-object` を各1プロセスにまとめる。
   - `assertSafeRef`: base/revision を単独引数で渡す前に検証（空・`-`始まり・制御文字を拒否）。
 - `src/diffTree.ts` — `TreeDataProvider`。トップ=worktree、配下に dir/file ノード。
-  - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。`commentsOnly` / `hideViewed` / `markedOnly` フィルタ（list/tree と直交）。
+  - `list`/`tree` 表示モード。tree は単一子フォルダを `compactDir` で畳む。`commentsOnly` / `hideViewed` / `markedOnly` / `hideEmptyWorktrees` フィルタ（list/tree と直交、いずれもセッション限り）。`hideEmptyWorktrees` はルート分岐で全 worktree の `entriesFor` を先に解決し `isEmptyWorktree`（生の差分 0 件かつコメント無し。ignore 適用前・取得失敗 null は隠さない）で落とす。
   - ファイルの子＝コメント(CommentNode)。フォルダ/worktree に 💬 集計、差分なしは MessageNode。
   - 差分に無いがコメントの付いたファイルは `visibleEntries` → `commentedExtras` で `status:'none'` の `TreeEntry` として合流（コメントが付いたときだけ出る。viewed チェック無し、クリックは `openDiff` が実ファイルを開く）。`cache`/`filesUnder`/進捗は差分(DiffEntry)のみで数える。入れ子 worktree は `owningWorktreePath`（最長一致）で親に出さない。
   - viewed チェックボックス。フォルダは配下全 viewed で checked（`manageCheckboxStateManually:true` で自前管理）。

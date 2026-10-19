@@ -289,6 +289,18 @@
         "category": "ponpoko-review"
       },
       {
+        "command": "ponpokoReview.hideEmptyWorktreesOn",
+        "title": "差分なしの worktree を隠す",
+        "icon": "$(folder)",
+        "category": "ponpoko-review"
+      },
+      {
+        "command": "ponpokoReview.hideEmptyWorktreesOff",
+        "title": "差分なしの worktree も表示",
+        "icon": "$(folder-active)",
+        "category": "ponpoko-review"
+      },
+      {
         "command": "ponpokoReview.mark",
         "title": "📌 マークする",
         "icon": "$(pin)",
@@ -342,6 +354,16 @@
           "command": "ponpokoReview.markedOnlyOff",
           "when": "view == ponpokoReview.diffTree && ponpokoReview.markedOnly",
           "group": "navigation@1"
+        },
+        {
+          "command": "ponpokoReview.hideEmptyWorktreesOn",
+          "when": "view == ponpokoReview.diffTree && !ponpokoReview.hideEmptyWorktrees",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ponpokoReview.hideEmptyWorktreesOff",
+          "when": "view == ponpokoReview.diffTree && ponpokoReview.hideEmptyWorktrees",
+          "group": "navigation@2"
         },
         {
           "command": "ponpokoReview.settings",

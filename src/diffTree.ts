@@ -100,6 +100,8 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   private hideViewed = false;
   /** 📌 マーク済みのファイルだけ表示（他フィルタと直交）。 */
   private markedOnly = false;
+  /** 差分なし（生の差分 0 件かつコメント無し）の worktree をツリーから隠す（他フィルタと直交）。 */
+  private hideEmptyWorktrees = false;
   /** 「無視」する glob 文字列と、その判定関数（パターンから生成）。 */
   private ignorePattern = '';
   private ignoreMatcher: (relPath: string) => boolean = () => false;
@@ -215,6 +217,18 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
   setMarkedOnly(on: boolean): void {
     if (this.markedOnly !== on) {
       this.markedOnly = on;
+      this._onDidChangeTreeData.fire();
+    }
+  }
+
+  getHideEmptyWorktrees(): boolean {
+    return this.hideEmptyWorktrees;
+  }
+
+  /** 差分なしの worktree を隠す（list/tree・他フィルタと直交）。判定は isEmptyWorktree。 */
+  setHideEmptyWorktrees(on: boolean): void {
+    if (this.hideEmptyWorktrees !== on) {
+      this.hideEmptyWorktrees = on;
       this._onDidChangeTreeData.fire();
     }
   }
@@ -578,6 +592,19 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       // worktree ラベルが解決済み base を表示できるよう、先に base を解決(実在確認＋フォールバック)。
       await Promise.all(worktrees.map((w) => this.resolveBase(w)));
       let nodes: DiffNode[] = worktrees.map((worktree) => ({ kind: 'worktree', worktree }));
+      if (this.hideEmptyWorktrees) {
+        // 差分なし（ignore 適用前の生の差分が 0 件かつコメント無し）の worktree を落とす。
+        // ignore で全件消えた worktree は「差分あり」なので残す（ignore は表示上のノイズ除去）。
+        const empties = await Promise.all(
+          worktrees.map(async (w) =>
+            isEmptyWorktree(await this.entriesFor(w), this.commentCountUnder(w.path)),
+          ),
+        );
+        nodes = nodes.filter((_, i) => !empties[i]);
+        if (nodes.length === 0) {
+          return [{ kind: 'message', label: '差分のある worktree はありません' }];
+        }
+      }
       if (this.commentsOnly) {
         // コメントのある worktree だけ残す。
         nodes = nodes.filter(
@@ -756,6 +783,14 @@ export class DiffTreeProvider implements vscode.TreeDataProvider<DiffNode> {
       // ハッシュ取得失敗時は viewed を維持（誤って外さない）。
     }
   }
+}
+
+/**
+ * hideEmptyWorktrees で隠す worktree か。生の差分（ignore 適用前）が 0 件で、かつ配下に
+ * コメントが無いときだけ true。diff 取得失敗(null)はエラー表示を隠さないよう false。
+ */
+export function isEmptyWorktree(entries: DiffEntry[] | null, commentCount: number): boolean {
+  return entries !== null && entries.length === 0 && commentCount === 0;
 }
 
 /** dir 直下の子（サブディレクトリ＋ファイル）を返す。単一子フォルダは圧縮する。 */

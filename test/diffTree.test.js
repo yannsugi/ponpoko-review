@@ -73,3 +73,13 @@ test('owningWorktreePath: 入れ子 worktree は最長一致', () => {
   assert.strictEqual(owningWorktreePath('/repo/.claude/worktrees/x/src/a.ts', wts), '/repo/.claude/worktrees/x');
   assert.strictEqual(owningWorktreePath('/other/a.ts', wts), undefined);
 });
+
+test('isEmptyWorktree: 生の差分 0 件かつコメント無しのときだけ空', () => {
+  const { isEmptyWorktree } = require('../out/diffTree.js');
+  assert.strictEqual(isEmptyWorktree([], 0), true);
+  assert.strictEqual(isEmptyWorktree([{ status: 'M', path: 'a.ts' }], 0), false);
+  // 差分は無いがコメント付きファイル（status 'none'）がある worktree は隠さない
+  assert.strictEqual(isEmptyWorktree([], 1), false);
+  // diff 取得失敗(null)はエラーを隠さないよう「空」扱いしない
+  assert.strictEqual(isEmptyWorktree(null, 0), false);
+});
