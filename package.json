@@ -259,7 +259,8 @@
       {
         "command": "ponpokoReview.openFile",
         "title": "ファイルを開く",
-        "category": "ponpoko-review"
+        "category": "ponpoko-review",
+        "icon": "$(go-to-file)"
       },
       {
         "command": "ponpokoReview.copyRelativePath",
@@ -426,6 +427,11 @@
           "command": "ponpokoReview.unmark",
           "when": "view == ponpokoReview.diffTree && (viewItem == ponpoko.file.marked || viewItem == ponpoko.dir.marked)",
           "group": "inline@0"
+        },
+        {
+          "command": "ponpokoReview.openFile",
+          "when": "view == ponpokoReview.diffTree && viewItem =~ /^ponpoko\\.file/",
+          "group": "inline@1"
         },
         {
           "command": "ponpokoReview.openFile",
