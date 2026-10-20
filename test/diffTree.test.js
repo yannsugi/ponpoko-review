@@ -1,7 +1,15 @@
 require('./vscode-stub.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { dirChildren, compactDir, worktreeName, isUnderDir, owningWorktreePath } = require('../out/diffTree.js');
+const {
+  dirChildren,
+  compactDir,
+  worktreeName,
+  isUnderDir,
+  owningWorktreePath,
+  isWorktreeComplete,
+  worktreeProgressLabel,
+} = require('../out/diffTree.js');
 
 const wt = { path: '/repo', branch: 'main', head: 'x', detached: false };
 
@@ -82,4 +90,17 @@ test('isEmptyWorktree: 生の差分 0 件かつコメント無しのときだけ
   assert.strictEqual(isEmptyWorktree([], 1), false);
   // diff 取得失敗(null)はエラーを隠さないよう「空」扱いしない
   assert.strictEqual(isEmptyWorktree(null, 0), false);
+});
+
+test('isWorktreeComplete: 対象 1 件以上かつ全 viewed のときだけ true', () => {
+  assert.strictEqual(isWorktreeComplete(3, 3), true);
+  assert.strictEqual(isWorktreeComplete(2, 3), false);
+  assert.strictEqual(isWorktreeComplete(0, 0), false);
+});
+
+test('worktreeProgressLabel: 0 件は空・途中は ✓済/総数・完了は ✓ N 件 完了', () => {
+  assert.strictEqual(worktreeProgressLabel(0, 0), '');
+  assert.strictEqual(worktreeProgressLabel(0, 4), '✓0/4');
+  assert.strictEqual(worktreeProgressLabel(2, 4), '✓2/4');
+  assert.strictEqual(worktreeProgressLabel(4, 4), '✓ 4 件 完了');
 });
